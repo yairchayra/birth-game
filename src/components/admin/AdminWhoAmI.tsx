@@ -10,7 +10,7 @@ export default function AdminWhoAmI() {
   const [cards, setCards]   = useState<WhoAmICard[]>([])
   const [loading, setLoad]  = useState(true)
   const [saving, setSaving] = useState(false)
-  const [form, setForm]     = useState({ answer: '', hints: '' })
+  const [form, setForm]     = useState({ answer: '', hints: '', initialPixelLevel: '0' })
   const [uploadPct, setUploadPct] = useState<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -28,12 +28,13 @@ export default function AdminWhoAmI() {
     try {
       const url = await uploadFile(file, `who_am_i/${Date.now()}_${file.name}`, p => setUploadPct(p))
       await addWhoAmICard({
-        imageUrl: url,
-        answer:   form.answer.trim(),
-        hints:    form.hints.split('\n').filter(Boolean),
-        order:    cards.length,
+        imageUrl:          url,
+        answer:            form.answer.trim(),
+        hints:             form.hints.split('\n').filter(Boolean),
+        order:             cards.length,
+        initialPixelLevel: parseInt(form.initialPixelLevel) || 0,
       })
-      setForm({ answer: '', hints: '' })
+      setForm({ answer: '', hints: '', initialPixelLevel: '0' })
       if (fileRef.current) fileRef.current.value = ''
       setUploadPct(null)
       await load()
@@ -69,6 +70,23 @@ export default function AdminWhoAmI() {
             rows={3}
             className="input-field resize-none"
           />
+          <div>
+            <label className="text-xs text-gray-500 font-medium mb-1 block">
+              רמת פיקסול התחלתית: {form.initialPixelLevel} (0=הכי מפוקסל, 6=כמעט ברור)
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="6"
+              value={form.initialPixelLevel}
+              onChange={e => setForm(f => ({ ...f, initialPixelLevel: e.target.value }))}
+              className="w-full accent-pink-400"
+            />
+            <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+              <span>בלתי ניתן לזיהוי</span>
+              <span>כמעט ברור</span>
+            </div>
+          </div>
           {uploadPct !== null && (
             <div className="h-2 bg-blush-100 rounded-full overflow-hidden">
               <div className="h-full bg-blush-400 rounded-full transition-all" style={{ width: `${uploadPct}%` }} />

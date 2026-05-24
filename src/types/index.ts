@@ -35,11 +35,12 @@ export interface WordleGuess {
 // ─── Who Am I ─────────────────────────────────────────────────────────────────
 
 export interface WhoAmICard {
-  id:          string
-  imageUrl:    string
-  answer:      string
-  hints:       string[]
-  order:       number
+  id:               string
+  imageUrl:         string
+  answer:           string
+  hints:            string[]
+  order:            number
+  initialPixelLevel?: number  // 0 = most pixelated (default), 6 = nearly clear
 }
 
 // ─── Songs ────────────────────────────────────────────────────────────────────
@@ -48,8 +49,9 @@ export interface Song {
   id:           string
   title:        string
   artist:       string
-  lyricClue:    string   // The mangled/translated lyric shown to user
-  hints:        string[] // [artist, album art url, spotify link]
+  lyricClue:    string    // שמור לתאימות לאחור — שורה ראשונה
+  lyricLines:   string[]  // עד 4 שורות, נחשפות הדרגתית
+  hints:        string[]  // [artist, album art url, spotify link]
   spotifyUrl:   string
   coverUrl:     string
   order:        number
@@ -84,10 +86,28 @@ export interface FinalLetter {
   content: string
 }
 
+// ─── Game Review ──────────────────────────────────────────────────────────────
+
+export interface StageResult {
+  stageNum:  number   // 1-based
+  answer:    string
+  attempts:  number   // wrong guesses (display as attempts+1 if correct)
+  hintsUsed: boolean
+  correct:   boolean
+  detail?:   string   // e.g. "אמן — שם שיר"
+}
+
+// ─── Stage Progress (persisted per-game) ──────────────────────────────────────
+
+export interface StageProgressData {
+  results: Record<number, StageResult>  // 0-based stageIdx → StageResult
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export interface AppState {
   progress:           Record<GameId, GameProgress>
+  stageProgress:      Record<GameId, StageProgressData>
   splashDone:         boolean
   currentVideoGame:   GameId | 'finale' | null
   setSplashDone:      () => void
@@ -96,4 +116,7 @@ export interface AppState {
   openVideo:          (gameId: GameId | 'finale') => void
   closeVideo:         () => void
   allGamesCompleted:  () => boolean
+  resetGame:          (id: GameId) => void
+  markStageComplete:  (gameId: GameId, stageIdx: number, result: StageResult) => void
+  clearStageProgress: (gameId: GameId) => void
 }

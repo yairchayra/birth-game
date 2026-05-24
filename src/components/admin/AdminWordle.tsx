@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  getWordleWords, addWordleWord, updateWordleWord, deleteWordleWord,
+  getWordleWords, addWordleWord, deleteWordleWord,
 } from '@/services/firebase'
 import type { WordleWord } from '@/types'
 
