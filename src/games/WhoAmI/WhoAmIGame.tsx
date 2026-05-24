@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
@@ -8,43 +8,24 @@ import GameReview from '@/components/GameReview'
 import StagePicker from '@/components/StagePicker'
 import type { WhoAmICard } from '@/types'
 
-// ─── CSS Pixelation ───────────────────────────────────────────────────────────
-const RESOLUTIONS = [16, 24, 36, 52, 75, 110, 170, 9999]
+// ─── Blur levels: 0 = fully blurred, 7 = fully clear ─────────────────────────
+const BLUR_PX = [40, 28, 18, 12, 7, 3.5, 1, 0]
+const MAX_REVEAL = 7
 
-function PixelatedImage({ src, level }: { src: string; level: number }) {
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const [containerPx, setContainerPx] = useState(350)
-
-  useEffect(() => {
-    if (wrapRef.current) setContainerPx(wrapRef.current.offsetWidth || 350)
-  }, [])
-
-  const targetRes   = Math.min(RESOLUTIONS[Math.min(level, 7)], containerPx)
-  const scale       = containerPx / targetRes
-  const isPixelated = targetRes < containerPx
-
+function BlurredImage({ src, level }: { src: string; level: number }) {
+  const blur = BLUR_PX[Math.min(level, 7)]
   return (
-    <div
-      ref={wrapRef}
-      className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-strong bg-blush-50"
-    >
-      {containerPx > 0 && (
-        <img
-          src={src}
-          alt="מי אני?"
-          style={{
-            position:       'absolute',
-            top:            0,
-            left:           0,
-            width:          targetRes,
-            height:         targetRes,
-            objectFit:      'cover',
-            imageRendering: isPixelated ? 'pixelated' : 'auto',
-            transformOrigin:'0 0',
-            transform:      `scale(${scale})`,
-          }}
-        />
-      )}
+    <div className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-strong bg-blush-50">
+      <img
+        src={src}
+        alt="מי אני?"
+        className="w-full h-full object-cover"
+        style={{
+          filter:     blur > 0 ? `blur(${blur}px)` : 'none',
+          transition: 'filter 0.5s ease',
+          transform:  blur > 0 ? 'scale(1.08)' : 'scale(1)',  // hide blur edges
+        }}
+      />
       <div className="absolute bottom-3 right-3 z-10 bg-white/85 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-bold text-blush-500 shadow-soft">
         בהירות {level}/7
       </div>
@@ -53,9 +34,6 @@ function PixelatedImage({ src, level }: { src: string; level: number }) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-const MAX_REVEAL = 7
-const MAX_HINTS  = 3
-
 type Mode = 'pick' | 'play' | 'review'
 
 export default function WhoAmIGame() {
@@ -85,8 +63,8 @@ export default function WhoAmIGame() {
     getWhoAmICards().then(c => { setCards(c.slice(0, 10)); setLoading(false) })
   }, [])
 
-  const resetPlay = (card?: WhoAmICard) => {
-    setRevealLevel(card?.initialPixelLevel ?? 0)
+  const resetPlay = (c?: WhoAmICard) => {
+    setRevealLevel(c?.initialPixelLevel ?? 0)
     setTextHints(0)
     setAttempts(0)
     setGuess('')
@@ -99,12 +77,17 @@ export default function WhoAmIGame() {
     setMode('play')
   }
 
-  const goToPicker = () => {
-    resetPlay()
-    setMode('pick')
-  }
-
+  const goToPicker = () => { resetPlay(); setMode('pick') }
   const goToReview = () => setMode('review')
+
+  const doAutoFail = (newAttempts: number, newLevel: number) => {
+    const hintsUsed = textHints > 0 || newLevel > (card.initialPixelLevel ?? 0)
+    markStageComplete('who-am-i', activeIdx, {
+      stageNum: activeIdx + 1, answer: card.answer,
+      attempts: newAttempts, hintsUsed, correct: false,
+    })
+    setResult('gave-up')
+  }
 
   const submit = () => {
     if (!guess.trim() || result) return
@@ -112,31 +95,24 @@ export default function WhoAmIGame() {
     if (correct) {
       const hintsUsed = textHints > 0 || revealLevel > (card.initialPixelLevel ?? 0)
       markStageComplete('who-am-i', activeIdx, {
-        stageNum:  activeIdx + 1,
-        answer:    card.answer,
-        attempts,
-        hintsUsed,
-        correct:   true,
+        stageNum: activeIdx + 1, answer: card.answer,
+        attempts, hintsUsed, correct: true,
       })
       setResult('correct')
     } else {
-      setAttempts(a => a + 1)
-      setWrongFlash(true)
+      const newAttempts = attempts + 1
+      const newLevel    = Math.min(revealLevel + 1, MAX_REVEAL)
+      setAttempts(newAttempts)
+      setRevealLevel(newLevel)
       setGuess('')
-      setTimeout(() => setWrongFlash(false), 1100)
+      if (newLevel >= MAX_REVEAL) {
+        // Auto-fail: fully revealed and still wrong
+        doAutoFail(newAttempts, newLevel)
+      } else {
+        setWrongFlash(true)
+        setTimeout(() => setWrongFlash(false), 1100)
+      }
     }
-  }
-
-  const giveUp = () => {
-    const hintsUsed = textHints > 0 || revealLevel > (card.initialPixelLevel ?? 0)
-    markStageComplete('who-am-i', activeIdx, {
-      stageNum:  activeIdx + 1,
-      answer:    card.answer,
-      attempts,
-      hintsUsed,
-      correct:   false,
-    })
-    setResult('gave-up')
   }
 
   const finishReview = () => {
@@ -154,7 +130,6 @@ export default function WhoAmIGame() {
     </div>
   )
 
-  // ── Pick mode ──
   if (mode === 'pick') return (
     <PageWrapper>
       <StagePicker
@@ -169,22 +144,13 @@ export default function WhoAmIGame() {
     </PageWrapper>
   )
 
-  // ── Review mode ──
   if (mode === 'review') {
     const stageResults = Object.entries(results)
       .sort(([a], [b]) => Number(a) - Number(b))
       .map(([, r]) => r)
-    return (
-      <GameReview
-        results={stageResults}
-        gameName="מי אני?"
-        gameEmoji="🔍"
-        onContinue={finishReview}
-      />
-    )
+    return <GameReview results={stageResults} gameName="מי אני?" gameEmoji="🔍" onContinue={finishReview} />
   }
 
-  // ── Play mode ──
   if (!card) return null
   const hintsUsedSoFar = textHints > 0 || revealLevel > (card.initialPixelLevel ?? 0)
 
@@ -192,19 +158,33 @@ export default function WhoAmIGame() {
     <PageWrapper>
       <div className="min-h-screen bg-gradient-soft flex flex-col">
         {/* Header */}
-        <div className="px-5 pt-10 pb-3 flex items-center justify-between">
-          <button onClick={goToPicker} className="btn-ghost">→ חזרה</button>
-          <h1 className="text-xl font-black text-gradient">מי אני?</h1>
-          <span className="text-sm text-gray-400">שלב {activeIdx + 1}/{cards.length}</span>
+        <div className="px-5 pt-10 pb-2 flex items-center justify-between">
+          <button onClick={goToPicker} className="btn-ghost text-sm">→ חזרה</button>
+          <h1 className="text-lg font-black text-gradient">מי אני?</h1>
+          <span className="text-sm text-gray-400">{activeIdx + 1}/{cards.length}</span>
+        </div>
+
+        {/* Prev / Next */}
+        <div className="px-5 pb-3 flex gap-2">
+          <button
+            onClick={() => selectStage(activeIdx - 1)}
+            disabled={activeIdx === 0}
+            className={`btn-secondary flex-1 text-xs py-1.5 ${activeIdx === 0 ? 'opacity-30' : ''}`}
+          >→ הקודם</button>
+          <button
+            onClick={() => selectStage(activeIdx + 1)}
+            disabled={activeIdx === cards.length - 1}
+            className={`btn-secondary flex-1 text-xs py-1.5 ${activeIdx === cards.length - 1 ? 'opacity-30' : ''}`}
+          >הבא ←</button>
         </div>
 
         <div className="flex-1 px-5 pb-8 flex flex-col gap-4">
-          {/* Pixelated image */}
+          {/* Blurred image */}
           <motion.div key={`img-${activeIdx}`} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-            <PixelatedImage src={card.imageUrl} level={revealLevel} />
+            <BlurredImage src={card.imageUrl} level={revealLevel} />
           </motion.div>
 
-          {/* Action buttons */}
+          {/* Reveal button (manual) */}
           {!result && (
             <div className="flex gap-3">
               <button
@@ -216,12 +196,12 @@ export default function WhoAmIGame() {
                 <span className="text-xs mr-1 opacity-60">({MAX_REVEAL - revealLevel})</span>
               </button>
               <button
-                onClick={() => setTextHints(h => Math.min(h + 1, Math.min(card.hints.length, MAX_HINTS)))}
-                disabled={textHints >= card.hints.length || textHints >= MAX_HINTS}
-                className={`btn-secondary flex-1 text-sm ${(textHints >= card.hints.length || textHints >= MAX_HINTS) ? 'opacity-40' : ''}`}
+                onClick={() => setTextHints(h => Math.min(h + 1, card.hints.length))}
+                disabled={textHints >= card.hints.length}
+                className={`btn-secondary flex-1 text-sm ${textHints >= card.hints.length ? 'opacity-40' : ''}`}
               >
                 💡 רמז
-                <span className="text-xs mr-1 opacity-60">({Math.max(0, Math.min(card.hints.length, MAX_HINTS) - textHints)})</span>
+                <span className="text-xs mr-1 opacity-60">({Math.max(0, card.hints.length - textHints)})</span>
               </button>
             </div>
           )}
@@ -230,8 +210,7 @@ export default function WhoAmIGame() {
           <AnimatePresence>
             {card.hints.slice(0, textHints).map((h, i) => (
               <motion.div key={`hint-${i}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card p-3 flex items-center gap-2 text-sm text-gray-600">
-                <span className="text-base">💡</span>
-                <span>{h}</span>
+                <span>💡</span><span>{h}</span>
               </motion.div>
             ))}
           </AnimatePresence>
@@ -239,8 +218,8 @@ export default function WhoAmIGame() {
           {/* Wrong flash */}
           <AnimatePresence>
             {wrongFlash && (
-              <motion.div initial={{ opacity: 0, y: -8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="card p-3 bg-red-50 border border-red-100 text-center">
-                <p className="text-red-500 font-semibold text-sm">❌ לא נכון — נסי שוב! (ניסיון {attempts + 1})</p>
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="card p-3 bg-red-50 border border-red-100 text-center">
+                <p className="text-red-500 font-semibold text-sm">❌ לא נכון — התמונה התבהרה קצת! (ניסיון {attempts})</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -263,35 +242,21 @@ export default function WhoAmIGame() {
                     <div className="text-xs text-gray-400">{hintsUsedSoFar ? 'עם רמז' : 'בלי רמז!'}</div>
                   </div>
                 </div>
-                <button onClick={goToPicker} className="btn-primary mt-4 w-full">
-                  חזרה לבחירת שלבים ←
-                </button>
+                <button onClick={goToPicker} className="btn-primary mt-4 w-full">חזרה לבחירת שלבים ←</button>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Input + controls */}
+          {/* Input */}
           {!result && (
             <div className="flex flex-col gap-3">
               <input
-                type="text"
-                value={guess}
+                type="text" value={guess}
                 onChange={e => setGuess(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && submit()}
-                placeholder="מי זה?"
-                className="input-field text-center text-lg font-semibold"
-                autoComplete="off"
+                placeholder="מי זה?" className="input-field text-center text-lg font-semibold" autoComplete="off"
               />
-              <div className="flex gap-3">
-                {attempts >= 2 && (
-                  <button onClick={giveUp} className="btn-ghost flex-1 text-sm text-gray-400">
-                    😮‍💨 ויתרתי
-                  </button>
-                )}
-                <button onClick={submit} className="btn-primary flex-1">
-                  נחשי! 🔍
-                </button>
-              </div>
+              <button onClick={submit} className="btn-primary">נחשי! 🔍</button>
             </div>
           )}
         </div>

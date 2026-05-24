@@ -62,7 +62,6 @@ export default function WordleGame() {
   const [mode, setMode]       = useState<Mode>('pick')
   const [activeIdx, setActiveIdx] = useState(0)
 
-  // Per-stage play state
   const [guesses, setGuesses]   = useState<WordleGuess[]>([])
   const [current, setCurrent]   = useState('')
   const [gameOver, setGameOver] = useState(false)
@@ -154,7 +153,6 @@ export default function WordleGame() {
     if (current.length < answer.length) setCurrent(c => c + key)
   }
 
-  // Build display grid
   const grid = [...guesses]
   if (!gameOver && guesses.length < MAX_GUESSES) {
     const row: WordleGuess['letters'] = []
@@ -171,7 +169,6 @@ export default function WordleGame() {
     </div>
   )
 
-  // ── Pick mode ──
   if (mode === 'pick') return (
     <PageWrapper>
       <StagePicker
@@ -186,7 +183,6 @@ export default function WordleGame() {
     </PageWrapper>
   )
 
-  // ── Review mode ──
   if (mode === 'review') {
     const stageResults = Object.entries(results)
       .sort(([a], [b]) => Number(a) - Number(b))
@@ -201,18 +197,23 @@ export default function WordleGame() {
     )
   }
 
-  // ── Play mode ──
   return (
     <PageWrapper>
       <div className="min-h-screen bg-gradient-soft flex flex-col">
-        <div className="px-5 pt-10 pb-3 flex items-center justify-between">
-          <button onClick={goToPicker} className="btn-ghost">→ חזרה</button>
-          <h1 className="text-xl font-black text-gradient">Wordle</h1>
-          <span className="text-sm text-gray-400">שלב {activeIdx + 1}/{words.length}</span>
+        <div className="px-5 pt-10 pb-2 flex items-center justify-between">
+          <button onClick={goToPicker} className="btn-ghost text-sm">→ חזרה</button>
+          <h1 className="text-lg font-black text-gradient">Wordle</h1>
+          <span className="text-sm text-gray-400">{activeIdx + 1}/{words.length}</span>
+        </div>
+
+        <div className="px-5 pb-2 flex gap-2">
+          <button onClick={() => selectStage(activeIdx - 1)} disabled={activeIdx === 0}
+            className={`btn-secondary flex-1 text-xs py-1.5 ${activeIdx === 0 ? 'opacity-30' : ''}`}>→ הקודם</button>
+          <button onClick={() => selectStage(activeIdx + 1)} disabled={activeIdx === words.length - 1}
+            className={`btn-secondary flex-1 text-xs py-1.5 ${activeIdx === words.length - 1 ? 'opacity-30' : ''}`}>הבא ←</button>
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center gap-1.5 px-4 pb-2">
-          {/* Stage result notification */}
           <AnimatePresence>
             {gameOver && (
               <motion.div
@@ -238,7 +239,6 @@ export default function WordleGame() {
             )}
           </AnimatePresence>
 
-          {/* Grid */}
           <div className={shake ? 'animate-shake' : ''}>
             {grid.map((row, ri) => {
               const isSubmitted = ri < guesses.length
@@ -260,7 +260,6 @@ export default function WordleGame() {
           </div>
         </div>
 
-        {/* Keyboard */}
         <div className="px-3 pb-6 pt-2">
           {HEBREW_KEYBOARD.map((row, ri) => (
             <div key={ri} className="flex justify-center gap-1 mb-1.5">

@@ -22,7 +22,6 @@ export default function LukaGame() {
   const [mode, setMode]       = useState<Mode>('pick')
   const [activeIdx, setActiveIdx] = useState(0)
 
-  // Per-stage play state
   const [hintIdx, setHintIdx]       = useState(0)
   const [guess, setGuess]           = useState('')
   const [result, setResult]         = useState<'correct' | 'gave-up' | null>(null)
@@ -99,7 +98,6 @@ export default function LukaGame() {
     </div>
   )
 
-  // ── Pick mode ──
   if (mode === 'pick') return (
     <PageWrapper>
       <StagePicker
@@ -114,7 +112,6 @@ export default function LukaGame() {
     </PageWrapper>
   )
 
-  // ── Review mode ──
   if (mode === 'review') {
     const stageResults = Object.entries(results)
       .sort(([a], [b]) => Number(a) - Number(b))
@@ -129,22 +126,28 @@ export default function LukaGame() {
     )
   }
 
-  // ── Play mode ──
   if (!card) return null
   const hintsUsedSoFar = hintIdx > 0
 
   return (
     <PageWrapper>
       <div className="min-h-screen bg-gradient-soft flex flex-col">
-        <div className="px-5 pt-10 pb-3 flex items-center justify-between">
-          <button onClick={goToPicker} className="btn-ghost">→ חזרה</button>
-          <h1 className="text-xl font-black text-gradient">כינויים ללוקה</h1>
-          <span className="text-sm text-gray-400">שלב {activeIdx + 1}/{cards.length}</span>
+        <div className="px-5 pt-10 pb-2 flex items-center justify-between">
+          <button onClick={goToPicker} className="btn-ghost text-sm">→ חזרה</button>
+          <h1 className="text-lg font-black text-gradient">כינויים ללוקה</h1>
+          <span className="text-sm text-gray-400">{activeIdx + 1}/{cards.length}</span>
+        </div>
+
+        <div className="px-5 pb-3 flex gap-2">
+          <button onClick={() => selectStage(activeIdx - 1)} disabled={activeIdx === 0}
+            className={`btn-secondary flex-1 text-xs py-1.5 ${activeIdx === 0 ? 'opacity-30' : ''}`}>→ הקודם</button>
+          <button onClick={() => selectStage(activeIdx + 1)} disabled={activeIdx === cards.length - 1}
+            className={`btn-secondary flex-1 text-xs py-1.5 ${activeIdx === cards.length - 1 ? 'opacity-30' : ''}`}>הבא ←</button>
         </div>
 
         <div className="flex-1 px-5 pb-8 flex flex-col gap-4">
-          {/* Image */}
-          <motion.div key={activeIdx} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-strong">
+          <motion.div key={activeIdx} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+            className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-strong">
             <img src={card.imageUrl} alt="כינוי ללוקה" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
             <div className="absolute bottom-4 right-4 left-4 text-center">
@@ -152,7 +155,6 @@ export default function LukaGame() {
             </div>
           </motion.div>
 
-          {/* Text hints */}
           <AnimatePresence>
             {card.hints.slice(0, hintIdx).map((h, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card p-3 flex items-center gap-3">
@@ -162,19 +164,19 @@ export default function LukaGame() {
             ))}
           </AnimatePresence>
 
-          {/* Wrong flash */}
           <AnimatePresence>
             {wrongFlash && (
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="card p-3 bg-red-50 border border-red-100 text-center">
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                className="card p-3 bg-red-50 border border-red-100 text-center">
                 <p className="text-red-500 font-semibold text-sm">❌ לא נכון — נסי שוב! (ניסיון {attempts + 1})</p>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Stage result */}
           <AnimatePresence>
             {result && (
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className={`card p-5 text-center ${result === 'correct' ? 'bg-peach-50' : 'bg-gray-50'}`}>
+              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                className={`card p-5 text-center ${result === 'correct' ? 'bg-peach-50' : 'bg-gray-50'}`}>
                 <div className="text-3xl mb-2">{result === 'correct' ? '🐶💕' : '😅'}</div>
                 <h3 className={`text-lg font-black mb-1 ${result === 'correct' ? 'text-peach-400' : 'text-gray-600'}`}>
                   {result === 'correct' ? 'מדהים!' : `הכינוי: ${card.nickname}`}
@@ -196,12 +198,15 @@ export default function LukaGame() {
             )}
           </AnimatePresence>
 
-          {/* Controls */}
           {!result && (
             <div className="flex flex-col gap-3">
-              <input type="text" value={guess} onChange={e => setGuess(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} placeholder="הכינוי של לוקה..." className="input-field text-center text-lg font-semibold" autoComplete="off" />
+              <input type="text" value={guess} onChange={e => setGuess(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && submit()}
+                placeholder="הכינוי של לוקה..." className="input-field text-center text-lg font-semibold" autoComplete="off" />
               <div className="flex gap-3">
-                <button onClick={() => setHintIdx(h => Math.min(card.hints.length, h + 1))} disabled={hintIdx >= card.hints.length} className={`btn-secondary flex-1 text-sm ${hintIdx >= card.hints.length ? 'opacity-40' : ''}`}>
+                <button onClick={() => setHintIdx(h => Math.min(card.hints.length, h + 1))}
+                  disabled={hintIdx >= card.hints.length}
+                  className={`btn-secondary flex-1 text-sm ${hintIdx >= card.hints.length ? 'opacity-40' : ''}`}>
                   🐾 רמז ({Math.max(0, card.hints.length - hintIdx)} נותרו)
                 </button>
                 <button onClick={submit} className="btn-primary flex-1">נחשי!</button>

@@ -8,8 +8,12 @@ import GameReview from '@/components/GameReview'
 import StagePicker from '@/components/StagePicker'
 import type { Song } from '@/types'
 
-type HintLevel = 0 | 1 | 2 | 3
-type Mode      = 'pick' | 'play' | 'review'
+type Mode = 'pick' | 'play' | 'review'
+
+function spotifyEmbedUrl(url: string): string | null {
+  const m = url.match(/track\/([A-Za-z0-9]+)/)
+  return m ? `https://open.spotify.com/embed/track/${m[1]}?utm_source=generator&theme=0` : null
+}
 
 export default function SongsGame() {
   const navigate          = useNavigate()
@@ -23,9 +27,8 @@ export default function SongsGame() {
   const [mode, setMode]       = useState<Mode>('pick')
   const [activeIdx, setActiveIdx] = useState(0)
 
-  // Per-stage play state
-  const [hint, setHint]             = useState<HintLevel>(0)
   const [revealedLines, setLines]   = useState(1)
+  const [hint, setHint]             = useState(0)
   const [guess, setGuess]           = useState('')
   const [result, setResult]         = useState<'correct' | 'gave-up' | null>(null)
   const [attempts, setAttempts]     = useState(0)
@@ -42,20 +45,14 @@ export default function SongsGame() {
     s.lyricLines?.length ? s.lyricLines : s.lyricClue ? [s.lyricClue] : []
 
   const resetPlay = () => {
-    setHint(0); setLines(1); setGuess(''); setResult(null); setAttempts(0)
+    setLines(1); setHint(0); setGuess(''); setResult(null); setAttempts(0)
   }
 
   const selectStage = (idx: number) => {
-    setActiveIdx(idx)
-    resetPlay()
-    setMode('play')
+    setActiveIdx(idx); resetPlay(); setMode('play')
   }
 
-  const goToPicker = () => {
-    resetPlay()
-    setMode('pick')
-  }
-
+  const goToPicker = () => { resetPlay(); setMode('pick') }
   const goToReview = () => setMode('review')
 
   const submit = () => {
@@ -64,18 +61,17 @@ export default function SongsGame() {
     if (correct) {
       const hintsUsed = hint > 0 || revealedLines > 1
       markStageComplete('songs', activeIdx, {
-        stageNum:  activeIdx + 1,
-        answer:    song.title,
-        attempts,
-        hintsUsed,
-        correct:   true,
-        detail:    song.artist,
+        stageNum: activeIdx + 1, answer: song.title,
+        attempts, hintsUsed, correct: true, detail: song.artist,
       })
       setResult('correct')
     } else {
+      const lines    = getLines(song)
+      const newLines = Math.min(revealedLines + 1, lines.length)
+      setLines(newLines)
       setAttempts(a => a + 1)
-      setWrongFlash(true)
       setGuess('')
+      setWrongFlash(true)
       setTimeout(() => setWrongFlash(false), 1100)
     }
   }
@@ -83,12 +79,8 @@ export default function SongsGame() {
   const giveUp = () => {
     const hintsUsed = hint > 0 || revealedLines > 1
     markStageComplete('songs', activeIdx, {
-      stageNum:  activeIdx + 1,
-      answer:    song.title,
-      attempts,
-      hintsUsed,
-      correct:   false,
-      detail:    song.artist,
+      stageNum: activeIdx + 1, answer: song.title,
+      attempts, hintsUsed, correct: false, detail: song.artist,
     })
     setResult('gave-up')
   }
@@ -108,77 +100,72 @@ export default function SongsGame() {
     </div>
   )
 
-  // ── Pick mode ──
   if (mode === 'pick') return (
     <PageWrapper>
       <StagePicker
-        totalStages={songs.length}
-        results={results}
-        gameName="זהי את השיר"
-        gameEmoji="🎵"
-        onSelect={selectStage}
-        onReview={goToReview}
+        totalStages={songs.length} results={results}
+        gameName="זהי את השיר" gameEmoji="🎵"
+        onSelect={selectStage} onReview={goToReview}
         onBack={() => navigate('/games')}
       />
     </PageWrapper>
   )
 
-  // ── Review mode ──
   if (mode === 'review') {
-    const stageResults = Object.entries(results)
-      .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([, r]) => r)
-    return (
-      <GameReview
-        results={stageResults}
-        gameName="זהי את השיר"
-        gameEmoji="🎵"
-        onContinue={finishReview}
-      />
-    )
+    const stageResults = Object.entries(results).sort(([a],[b])=>Number(a)-Number(b)).map(([,r])=>r)
+    return <GameReview results={stageResults} gameName="זהי את השיר" gameEmoji="🎵" onContinue={finishReview} />
   }
 
-  // ── Play mode ──
   if (!song) return null
   const lines          = getLines(song)
   const visibleLines   = lines.slice(0, revealedLines)
-  const canRevealMore  = revealedLines < lines.length
+  const allLinesShown  = revealedLines >= lines.length
   const hintsUsedSoFar = hint > 0 || revealedLines > 1
+  const embedUrl       = song.spotifyUrl ? spotifyEmbedUrl(song.spotifyUrl) : null
+  const maxHints       = embedUrl ? 2 : 1
 
   return (
     <PageWrapper>
       <div className="min-h-screen bg-gradient-soft flex flex-col">
-        <div className="px-5 pt-10 pb-3 flex items-center justify-between">
-          <button onClick={goToPicker} className="btn-ghost">→ חזרה</button>
-          <h1 className="text-xl font-black text-gradient">זהי את השיר</h1>
-          <span className="text-sm text-gray-400">שלב {activeIdx + 1}/{songs.length}</span>
+        <div className="px-5 pt-10 pb-2 flex items-center justify-between">
+          <button onClick={goToPicker} className="btn-ghost text-sm">→ חזרה</button>
+          <h1 className="text-lg font-black text-gradient">זהי את השיר</h1>
+          <span className="text-sm text-gray-400">{activeIdx + 1}/{songs.length}</span>
+        </div>
+
+        <div className="px-5 pb-3 flex gap-2">
+          <button
+            onClick={() => selectStage(activeIdx - 1)} disabled={activeIdx === 0}
+            className={`btn-secondary flex-1 text-xs py-1.5 ${activeIdx === 0 ? 'opacity-30' : ''}`}
+          >→ הקודם</button>
+          <button
+            onClick={() => selectStage(activeIdx + 1)} disabled={activeIdx === songs.length - 1}
+            className={`btn-secondary flex-1 text-xs py-1.5 ${activeIdx === songs.length - 1 ? 'opacity-30' : ''}`}
+          >הבא ←</button>
         </div>
 
         <div className="flex-1 px-5 pb-8 flex flex-col gap-4">
-          {/* Lyric card */}
           <motion.div key={activeIdx} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="card p-6 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-lavender-50 to-blush-50 opacity-60" />
             <div className="relative z-10">
               <div className="text-4xl mb-3">🎵</div>
-              <p className="text-xs text-gray-400 mb-3 font-medium">שורות: {revealedLines}/{lines.length || 1}</p>
+              <p className="text-xs text-gray-400 mb-3 font-medium">
+                שורות: {revealedLines}/{lines.length || 1}
+                {!allLinesShown && <span className="text-lavender-400 mr-2">· טעות תחשוף שורה נוספת</span>}
+              </p>
               <div className="flex flex-col gap-2">
                 <AnimatePresence>
                   {visibleLines.map((line, i) => (
-                    <motion.blockquote key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`font-bold leading-relaxed ${i === 0 ? 'text-xl text-gray-700' : 'text-lg text-gray-500'}`}>
+                    <motion.blockquote key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                      className={`font-bold leading-relaxed ${i === 0 ? 'text-xl text-gray-700' : 'text-lg text-gray-500'}`}>
                       "{line}"
                     </motion.blockquote>
                   ))}
                 </AnimatePresence>
               </div>
-              {canRevealMore && !result && (
-                <button onClick={() => setLines(l => l + 1)} className="mt-4 text-sm text-lavender-500 font-semibold flex items-center gap-1 mx-auto hover:text-lavender-600 transition-colors">
-                  ↓ שורה נוספת ({lines.length - revealedLines} נותרו)
-                </button>
-              )}
             </div>
           </motion.div>
 
-          {/* Hint panels */}
           <AnimatePresence>
             {hint >= 1 && (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card p-4 flex items-center gap-3">
@@ -186,34 +173,44 @@ export default function SongsGame() {
                 <div><p className="text-xs text-gray-400">אמן</p><p className="font-bold text-gray-700">{song.artist}</p></div>
               </motion.div>
             )}
-            {hint >= 2 && song.coverUrl && (
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card p-3 flex items-center gap-3">
-                <img src={song.coverUrl} alt="עטיפה" className="w-16 h-16 rounded-xl object-cover" />
-                <div><p className="text-xs text-gray-400">עטיפת האלבום</p></div>
-              </motion.div>
-            )}
-            {hint >= 3 && song.spotifyUrl && (
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card p-3">
-                <a href={song.spotifyUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-green-600 font-semibold">
-                  <span className="text-2xl">🎧</span>האזיני בספוטיפיי
-                </a>
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {hint >= 2 && embedUrl && (
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card overflow-hidden">
+                <p className="text-xs text-gray-400 px-4 pt-3 pb-1">🎧 האזיני לקטע</p>
+                <div className="relative" style={{ direction: 'ltr' }}>
+                  <iframe
+                    src={embedUrl}
+                    width="100%"
+                    height="152"
+                    frameBorder="0"
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="lazy"
+                    style={{ display: 'block' }}
+                  />
+                  {/* overlay hides track title — album art, artist & controls stay visible */}
+                  <div style={{ position: 'absolute', top: 43, left: 82, right: 8, height: 22, background: '#121212', pointerEvents: 'none', zIndex: 1 }} />
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Wrong flash */}
           <AnimatePresence>
             {wrongFlash && (
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="card p-3 bg-red-50 border border-red-100 text-center">
-                <p className="text-red-500 font-semibold text-sm">❌ לא נכון — נסי שוב! (ניסיון {attempts + 1})</p>
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                className="card p-3 bg-red-50 border border-red-100 text-center">
+                <p className="text-red-500 font-semibold text-sm">
+                  ❌ לא נכון{!allLinesShown ? ' — נחשפה שורה נוספת!' : ''} (ניסיון {attempts})
+                </p>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Stage result */}
           <AnimatePresence>
             {result && (
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className={`card p-5 text-center ${result === 'correct' ? 'bg-green-50' : 'bg-gray-50'}`}>
+              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                className={`card p-5 text-center ${result === 'correct' ? 'bg-green-50' : 'bg-gray-50'}`}>
                 <div className="text-3xl mb-2">{result === 'correct' ? '🎉' : '😅'}</div>
                 <h3 className={`text-lg font-black mb-0.5 ${result === 'correct' ? 'text-green-700' : 'text-gray-600'}`}>
                   {result === 'correct' ? 'מדהים!' : `התשובה: ${song.title}`}
@@ -229,24 +226,27 @@ export default function SongsGame() {
                     <div className="text-xs text-gray-400">{hintsUsedSoFar ? 'עם רמז' : 'בלי רמז!'}</div>
                   </div>
                 </div>
-                <button onClick={goToPicker} className="btn-primary mt-4 w-full">
-                  חזרה לבחירת שלבים ←
-                </button>
+                <button onClick={goToPicker} className="btn-primary mt-4 w-full">חזרה לבחירת שלבים ←</button>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Controls */}
           {!result && (
             <div className="flex flex-col gap-3">
-              <input type="text" value={guess} onChange={e => setGuess(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} placeholder="שם השיר..." className="input-field text-center text-lg" autoComplete="off" />
+              <input type="text" value={guess} onChange={e => setGuess(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && submit()}
+                placeholder="שם השיר..." className="input-field text-center text-lg" autoComplete="off" />
               <div className="flex gap-3">
-                <button onClick={() => setHint(h => Math.min(3, h + 1) as HintLevel)} disabled={hint >= 3} className={`btn-secondary flex-1 text-sm ${hint >= 3 ? 'opacity-40' : ''}`}>
-                  💡 רמז {hint > 0 ? `(${3 - hint} נותרו)` : ''}
+                <button
+                  onClick={() => setHint(h => Math.min(h + 1, maxHints))}
+                  disabled={hint >= maxHints}
+                  className={`btn-secondary flex-1 text-sm ${hint >= maxHints ? 'opacity-40' : ''}`}
+                >
+                  {hint === 0 ? '🎤 גלי אמן' : hint === 1 && embedUrl ? '🎧 שמעי קטע' : '💡 רמז'}
                 </button>
                 <button onClick={submit} className="btn-primary flex-1">נחשי! 🎵</button>
               </div>
-              {attempts >= 2 && (
+              {(allLinesShown || attempts >= 3) && (
                 <button onClick={giveUp} className="btn-ghost text-sm text-gray-400 text-center">😮‍💨 ויתרתי</button>
               )}
             </div>

@@ -22,9 +22,9 @@ const TABS: { id: Tab; label: string; emoji: string }[] = [
 ]
 
 export default function AdminDashboard() {
-  const navigate  = useNavigate()
-  const [tab, setTab]     = useState<Tab>('wordle')
-  const [authed, setAuthed] = useState(false)
+  const navigate = useNavigate()
+  const [tab, setTab]         = useState<Tab>('wordle')
+  const [authed, setAuthed]   = useState(false)
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export default function AdminDashboard() {
       else setAuthed(true)
       setChecking(false)
     })
-  }, [])
+  }, [navigate])
 
   if (checking) return (
     <div className="min-h-screen bg-gradient-soft flex items-center justify-center">
@@ -42,10 +42,7 @@ export default function AdminDashboard() {
   )
   if (!authed) return null
 
-  const handleLogout = async () => {
-    await signOut(auth)
-    navigate('/admin')
-  }
+  const handleLogout = async () => { await signOut(auth); navigate('/admin') }
 
   const renderTab = () => {
     switch (tab) {
@@ -60,15 +57,18 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-soft flex flex-col">
-      {/* Header */}
       <div className="bg-white/80 backdrop-blur-sm border-b border-blush-100 px-5 py-4 flex items-center justify-between sticky top-0 z-10">
         <h1 className="text-lg font-black text-gradient">Admin Panel</h1>
-        <button onClick={handleLogout} className="btn-ghost text-sm text-red-400">
-          יציאה
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate('/games')} className="btn-secondary text-sm py-1.5 px-3">
+            🎮 נסה
+          </button>
+          <button onClick={handleLogout} className="btn-ghost text-sm text-red-400">
+            יציאה
+          </button>
+        </div>
       </div>
 
-      {/* Tab bar */}
       <div className="overflow-x-auto px-3 py-3 border-b border-blush-50">
         <div className="flex gap-2 min-w-max">
           {TABS.map(t => (
@@ -81,14 +81,12 @@ export default function AdminDashboard() {
                   : 'bg-white/60 text-gray-500 hover:bg-blush-50'
               }`}
             >
-              <span>{t.emoji}</span>
-              <span>{t.label}</span>
+              <span>{t.emoji}</span><span>{t.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Content */}
       <motion.div
         key={tab}
         initial={{ opacity: 0, y: 10 }}
