@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Admin only — all game content collections
+    match /wordle_words/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /who_am_i/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /songs/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /luka_nicknames/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /home_videos/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /final_letter/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Game progress — any authenticated user can read/write their own
+    match /game_progress/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return request.auth != null &&
+             request.auth.token.email == 'yairrahmany@gmail.com';
+    }
+  }
+}
