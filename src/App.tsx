@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
 import SplashScreen from '@/pages/SplashScreen'
@@ -14,11 +14,11 @@ import AdminDashboard from '@/pages/admin/AdminDashboard'
 import VideoModal from '@/components/VideoModal'
 
 export default function App() {
-  const splashDone         = useAppStore(s => s.splashDone)
-  const currentVideoGame   = useAppStore(s => s.currentVideoGame)
+  const splashDone       = useAppStore(s => s.splashDone)
+  const currentVideoGame = useAppStore(s => s.currentVideoGame)
 
   return (
-    <BrowserRouter basename="/birth-game">
+    <HashRouter>
       <AnimatePresence mode="wait">
         <Routes>
           <Route path="/"         element={splashDone ? <Navigate to="/home" replace /> : <SplashScreen />} />
@@ -39,6 +39,6 @@ export default function App() {
       <AnimatePresence>
         {currentVideoGame && <VideoModal gameId={currentVideoGame} />}
       </AnimatePresence>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
