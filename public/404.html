@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Birth Games</title>
+    <script>
+      // GitHub Pages SPA fix: redirect /birth-game/some/path → /birth-game/#/some/path
+      var base = '/birth-game';
+      var path = window.location.pathname.replace(base, '') || '/';
+      var search = window.location.search;
+      var hash = window.location.hash;
+      window.location.replace(base + '/#' + path + search + hash);
+    </script>
+  </head>
+  <body></body>
+</html>
