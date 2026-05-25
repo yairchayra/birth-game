@@ -16,11 +16,20 @@ const initialStageProgress = (): Record<GameId, StageProgressData> => ({
   'luka':      { results: {} },
 })
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const initialStageState = (): Record<GameId, Record<number, any>> => ({
+  'wordle':    {},
+  'who-am-i': {},
+  'songs':     {},
+  'luka':      {},
+})
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       progress:         initialProgress(),
       stageProgress:    initialStageProgress(),
+      stageState:       initialStageState(),
       splashDone:       false,
       currentVideoGame: null,
 
@@ -57,6 +66,10 @@ export const useAppStore = create<AppState>()(
             ...state.stageProgress,
             [id]: { results: {} },
           },
+          stageState: {
+            ...state.stageState,
+            [id]: {},
+          },
         })),
 
       allGamesCompleted: () => {
@@ -82,6 +95,25 @@ export const useAppStore = create<AppState>()(
           stageProgress: {
             ...state.stageProgress,
             [gameId]: { results: {} },
+          },
+        })),
+
+      saveStageState: (gameId, stageIdx, state) =>
+        set(prev => ({
+          stageState: {
+            ...prev.stageState,
+            [gameId]: {
+              ...prev.stageState[gameId],
+              [stageIdx]: state,
+            },
+          },
+        })),
+
+      clearGameStageState: (gameId) =>
+        set(state => ({
+          stageState: {
+            ...state.stageState,
+            [gameId]: {},
           },
         })),
     }),

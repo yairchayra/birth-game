@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
@@ -6,9 +6,8 @@ import { getWhoAmICards } from '@/services/firebase'
 import PageWrapper from '@/components/PageWrapper'
 import GameReview from '@/components/GameReview'
 import StagePicker from '@/components/StagePicker'
-import type { WhoAmICard } from '@/types'
+import type { WhoAmICard, WhoAmIStageState } from '@/types'
 
-// ─── Blur levels: 0 = fully blurred, 7 = fully clear ─────────────────────────
 const BLUR_PX = [40, 28, 18, 12, 7, 3.5, 1, 0]
 const MAX_REVEAL = 7
 
@@ -23,7 +22,7 @@ function BlurredImage({ src, level }: { src: string; level: number }) {
         style={{
           filter:     blur > 0 ? `blur(${blur}px)` : 'none',
           transition: 'filter 0.5s ease',
-          transform:  blur > 0 ? 'scale(1.08)' : 'scale(1)',  // hide blur edges
+          transform:  blur > 0 ? 'scale(1.08)' : 'scale(1)',
         }}
       />
       <div className="absolute bottom-3 right-3 z-10 bg-white/85 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-bold text-blush-500 shadow-soft">
@@ -33,7 +32,6 @@ function BlurredImage({ src, level }: { src: string; level: number }) {
   )
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
 type Mode = 'pick' | 'play' | 'review'
 
 export default function WhoAmIGame() {
@@ -42,19 +40,21 @@ export default function WhoAmIGame() {
   const openVideo         = useAppStore(s => s.openVideo)
   const stageProgressData = useAppStore(s => s.stageProgress['who-am-i'])
   const markStageComplete = useAppStore(s => s.markStageComplete)
+  const savedStageState   = useAppStore(s => s.stageState['who-am-i'])
+  const saveStageState    = useAppStore(s => s.saveStageState)
 
   const [cards, setCards]     = useState<WhoAmICard[]>([])
   const [loading, setLoading] = useState(true)
   const [mode, setMode]       = useState<Mode>('pick')
   const [activeIdx, setActiveIdx] = useState(0)
 
-  // Per-stage play state
   const [revealLevel, setRevealLevel] = useState(0)
   const [textHints, setTextHints]     = useState(0)
   const [attempts, setAttempts]       = useState(0)
   const [guess, setGuess]             = useState('')
   const [result, setResult]           = useState<'correct' | 'gave-up' | null>(null)
   const [wrongFlash, setWrongFlash]   = useState(false)
+  const [guessHistory, setGuessHistory] = useState<string[]>([])
 
   const card    = cards[activeIdx]
   const results = stageProgressData?.results ?? {}
@@ -63,30 +63,66 @@ export default function WhoAmIGame() {
     getWhoAmICards().then(c => { setCards(c.slice(0, 10)); setLoading(false) })
   }, [])
 
-  const resetPlay = (c?: WhoAmICard) => {
-    setRevealLevel(c?.initialPixelLevel ?? 0)
-    setTextHints(0)
-    setAttempts(0)
+  const snapshotState = useCallback((
+    idx: number,
+    rl: number, th: number, att: number,
+    res: 'correct' | 'gave-up' | null,
+    gh: string[]
+  ) => {
+    saveStageState('who-am-i', idx, {
+      revealLevel: rl, textHints: th, attempts: att, result: res, guessHistory: gh,
+    } as WhoAmIStageState)
+  }, [saveStageState])
+
+  const loadStageOrReset = (idx: number, cardForIdx: WhoAmICard) => {
+    const saved = savedStageState?.[idx] as WhoAmIStageState | undefined
+    if (saved) {
+      setRevealLevel(saved.revealLevel)
+      setTextHints(saved.textHints)
+      setAttempts(saved.attempts)
+      setResult(saved.result)
+      setGuessHistory(saved.guessHistory)
+    } else {
+      setRevealLevel(cardForIdx?.initialPixelLevel ?? 0)
+      setTextHints(0)
+      setAttempts(0)
+      setResult(null)
+      setGuessHistory([])
+    }
     setGuess('')
-    setResult(null)
   }
 
   const selectStage = (idx: number) => {
+    snapshotState(activeIdx, revealLevel, textHints, attempts, result, guessHistory)
     setActiveIdx(idx)
-    resetPlay(cards[idx])
+    loadStageOrReset(idx, cards[idx])
     setMode('play')
   }
 
-  const goToPicker = () => { resetPlay(); setMode('pick') }
+  const goToPicker = () => {
+    snapshotState(activeIdx, revealLevel, textHints, attempts, result, guessHistory)
+    setMode('pick')
+  }
+
   const goToReview = () => setMode('review')
 
-  const doAutoFail = (newAttempts: number, newLevel: number) => {
+  const resetStage = () => {
+    const initialLevel = card?.initialPixelLevel ?? 0
+    setRevealLevel(initialLevel); setTextHints(0); setAttempts(0)
+    setResult(null); setGuessHistory([]); setGuess('')
+    saveStageState('who-am-i', activeIdx, {
+      revealLevel: initialLevel, textHints: 0, attempts: 0, result: null, guessHistory: [],
+    })
+  }
+
+  const doAutoFail = (newAttempts: number, newLevel: number, gh: string[]) => {
     const hintsUsed = textHints > 0 || newLevel > (card.initialPixelLevel ?? 0)
     markStageComplete('who-am-i', activeIdx, {
       stageNum: activeIdx + 1, answer: card.answer,
       attempts: newAttempts, hintsUsed, correct: false,
     })
     setResult('gave-up')
+    snapshotState(activeIdx, newLevel, textHints, newAttempts, 'gave-up', gh)
   }
 
   const submit = () => {
@@ -99,18 +135,21 @@ export default function WhoAmIGame() {
         attempts, hintsUsed, correct: true,
       })
       setResult('correct')
+      snapshotState(activeIdx, revealLevel, textHints, attempts, 'correct', guessHistory)
     } else {
       const newAttempts = attempts + 1
       const newLevel    = Math.min(revealLevel + 1, MAX_REVEAL)
+      const newHistory  = [...guessHistory, guess.trim()]
       setAttempts(newAttempts)
       setRevealLevel(newLevel)
+      setGuessHistory(newHistory)
       setGuess('')
       if (newLevel >= MAX_REVEAL) {
-        // Auto-fail: fully revealed and still wrong
-        doAutoFail(newAttempts, newLevel)
+        doAutoFail(newAttempts, newLevel, newHistory)
       } else {
         setWrongFlash(true)
         setTimeout(() => setWrongFlash(false), 1100)
+        snapshotState(activeIdx, newLevel, textHints, newAttempts, null, newHistory)
       }
     }
   }
@@ -157,14 +196,15 @@ export default function WhoAmIGame() {
   return (
     <PageWrapper>
       <div className="min-h-screen bg-gradient-soft flex flex-col">
-        {/* Header */}
         <div className="px-5 pt-10 pb-2 flex items-center justify-between">
           <button onClick={goToPicker} className="btn-ghost text-sm">→ חזרה</button>
           <h1 className="text-lg font-black text-gradient">מי אני?</h1>
-          <span className="text-sm text-gray-400">{activeIdx + 1}/{cards.length}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-400">{activeIdx + 1}/{cards.length}</span>
+            <button onClick={resetStage} title="איפוס שלב" className="text-gray-300 hover:text-blush-400 transition-colors text-lg leading-none">↺</button>
+          </div>
         </div>
 
-        {/* Prev / Next */}
         <div className="px-5 pb-3 flex gap-2">
           <button
             onClick={() => selectStage(activeIdx - 1)}
@@ -179,16 +219,18 @@ export default function WhoAmIGame() {
         </div>
 
         <div className="flex-1 px-5 pb-8 flex flex-col gap-4">
-          {/* Blurred image */}
           <motion.div key={`img-${activeIdx}`} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
             <BlurredImage src={card.imageUrl} level={revealLevel} />
           </motion.div>
 
-          {/* Reveal button (manual) */}
           {!result && (
             <div className="flex gap-3">
               <button
-                onClick={() => setRevealLevel(l => Math.min(l + 1, MAX_REVEAL))}
+                onClick={() => {
+                  const newLevel = Math.min(revealLevel + 1, MAX_REVEAL)
+                  setRevealLevel(newLevel)
+                  snapshotState(activeIdx, newLevel, textHints, attempts, null, guessHistory)
+                }}
                 disabled={revealLevel >= MAX_REVEAL}
                 className={`btn-secondary flex-1 text-sm ${revealLevel >= MAX_REVEAL ? 'opacity-40' : ''}`}
               >
@@ -196,7 +238,11 @@ export default function WhoAmIGame() {
                 <span className="text-xs mr-1 opacity-60">({MAX_REVEAL - revealLevel})</span>
               </button>
               <button
-                onClick={() => setTextHints(h => Math.min(h + 1, card.hints.length))}
+                onClick={() => {
+                  const newHints = Math.min(textHints + 1, card.hints.length)
+                  setTextHints(newHints)
+                  snapshotState(activeIdx, revealLevel, newHints, attempts, null, guessHistory)
+                }}
                 disabled={textHints >= card.hints.length}
                 className={`btn-secondary flex-1 text-sm ${textHints >= card.hints.length ? 'opacity-40' : ''}`}
               >
@@ -206,7 +252,6 @@ export default function WhoAmIGame() {
             </div>
           )}
 
-          {/* Text hints */}
           <AnimatePresence>
             {card.hints.slice(0, textHints).map((h, i) => (
               <motion.div key={`hint-${i}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card p-3 flex items-center gap-2 text-sm text-gray-600">
@@ -215,7 +260,17 @@ export default function WhoAmIGame() {
             ))}
           </AnimatePresence>
 
-          {/* Wrong flash */}
+          {/* Guess history */}
+          {guessHistory.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {guessHistory.map((g, i) => (
+                <span key={i} className="text-xs bg-red-50 border border-red-100 text-red-400 rounded-full px-3 py-1 font-medium">
+                  ❌ {g}
+                </span>
+              ))}
+            </div>
+          )}
+
           <AnimatePresence>
             {wrongFlash && (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="card p-3 bg-red-50 border border-red-100 text-center">
@@ -224,7 +279,6 @@ export default function WhoAmIGame() {
             )}
           </AnimatePresence>
 
-          {/* Stage result */}
           <AnimatePresence>
             {result && (
               <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className={`card p-5 text-center ${result === 'correct' ? 'bg-green-50' : 'bg-gray-50'}`}>
@@ -247,7 +301,6 @@ export default function WhoAmIGame() {
             )}
           </AnimatePresence>
 
-          {/* Input */}
           {!result && (
             <div className="flex flex-col gap-3">
               <input

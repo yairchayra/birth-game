@@ -6,7 +6,7 @@ import { getWordleWords } from '@/services/firebase'
 import PageWrapper from '@/components/PageWrapper'
 import GameReview from '@/components/GameReview'
 import StagePicker from '@/components/StagePicker'
-import type { WordleWord, LetterState, WordleGuess } from '@/types'
+import type { WordleWord, LetterState, WordleGuess, WordleStageState } from '@/types'
 
 const MAX_GUESSES = 6
 
@@ -48,6 +48,7 @@ const stateColors: Record<LetterState, string> = {
   tbd:     'bg-white border-blush-300 text-gray-700',
 }
 
+
 type Mode = 'pick' | 'play' | 'review'
 
 export default function WordleGame() {
@@ -56,6 +57,8 @@ export default function WordleGame() {
   const openVideo         = useAppStore(s => s.openVideo)
   const stageProgressData = useAppStore(s => s.stageProgress['wordle'])
   const markStageComplete = useAppStore(s => s.markStageComplete)
+  const savedStageState   = useAppStore(s => s.stageState['wordle'])
+  const saveStageState    = useAppStore(s => s.saveStageState)
 
   const [words, setWords]     = useState<WordleWord[]>([])
   const [loading, setLoading] = useState(true)
@@ -76,26 +79,47 @@ export default function WordleGame() {
     getWordleWords().then(w => { setWords(w.slice(0, 10)); setLoading(false) })
   }, [])
 
-  const resetPlay = () => {
-    setGuesses([])
+  // Save current stage state before leaving
+  const saveCurrentStage = useCallback((idx: number, g: WordleGuess[], uk: Record<string, LetterState>, go: boolean, w: boolean) => {
+    saveStageState('wordle', idx, { guesses: g, usedKeys: uk, gameOver: go, won: w } as WordleStageState)
+  }, [saveStageState])
+
+  const loadStageOrReset = (idx: number) => {
+    const saved = savedStageState?.[idx] as WordleStageState | undefined
+    if (saved) {
+      setGuesses(saved.guesses)
+      setUsedKeys(saved.usedKeys)
+      setGameOver(saved.gameOver)
+      setWon(saved.won)
+    } else {
+      setGuesses([])
+      setUsedKeys({})
+      setGameOver(false)
+      setWon(false)
+    }
     setCurrent('')
-    setGameOver(false)
-    setWon(false)
-    setUsedKeys({})
   }
 
   const selectStage = (idx: number) => {
+    // Save current before switching
+    saveCurrentStage(activeIdx, guesses, usedKeys, gameOver, won)
     setActiveIdx(idx)
-    resetPlay()
+    loadStageOrReset(idx)
     setMode('play')
   }
 
   const goToPicker = () => {
-    resetPlay()
+    saveCurrentStage(activeIdx, guesses, usedKeys, gameOver, won)
     setMode('pick')
   }
 
   const goToReview = () => setMode('review')
+
+  const resetStage = () => {
+    const fresh = { guesses: [], usedKeys: {}, gameOver: false, won: false } as WordleStageState
+    setGuesses([]); setUsedKeys({}); setGameOver(false); setWon(false); setCurrent('')
+    saveStageState('wordle', activeIdx, fresh)
+  }
 
   const submitGuess = useCallback(() => {
     if (current.length !== answer.length) {
@@ -119,23 +143,19 @@ export default function WordleGame() {
       setWon(true)
       setGameOver(true)
       markStageComplete('wordle', activeIdx, {
-        stageNum:  activeIdx + 1,
-        answer,
-        attempts:  next.length - 1,
-        hintsUsed: false,
-        correct:   true,
+        stageNum: activeIdx + 1, answer, attempts: next.length - 1, hintsUsed: false, correct: true,
       })
+      saveStageState('wordle', activeIdx, { guesses: next, usedKeys: keys, gameOver: true, won: true } as WordleStageState)
     } else if (next.length >= MAX_GUESSES) {
       setGameOver(true)
       markStageComplete('wordle', activeIdx, {
-        stageNum:  activeIdx + 1,
-        answer,
-        attempts:  next.length,
-        hintsUsed: false,
-        correct:   false,
+        stageNum: activeIdx + 1, answer, attempts: next.length, hintsUsed: false, correct: false,
       })
+      saveStageState('wordle', activeIdx, { guesses: next, usedKeys: keys, gameOver: true, won: false } as WordleStageState)
+    } else {
+      saveStageState('wordle', activeIdx, { guesses: next, usedKeys: keys, gameOver: false, won: false } as WordleStageState)
     }
-  }, [current, answer, guesses, usedKeys, activeIdx, markStageComplete])
+  }, [current, answer, guesses, usedKeys, activeIdx, markStageComplete, saveStageState])
 
   const finishReview = () => {
     const stageResults = Object.entries(results)
@@ -203,7 +223,10 @@ export default function WordleGame() {
         <div className="px-5 pt-10 pb-2 flex items-center justify-between">
           <button onClick={goToPicker} className="btn-ghost text-sm">→ חזרה</button>
           <h1 className="text-lg font-black text-gradient">Wordle</h1>
-          <span className="text-sm text-gray-400">{activeIdx + 1}/{words.length}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-400">{activeIdx + 1}/{words.length}</span>
+            <button onClick={resetStage} title="איפוס שלב" className="text-gray-300 hover:text-blush-400 transition-colors text-lg leading-none">↺</button>
+          </div>
         </div>
 
         <div className="px-5 pb-2 flex gap-2">

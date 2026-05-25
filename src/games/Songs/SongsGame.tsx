@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
@@ -6,7 +6,7 @@ import { getSongs } from '@/services/firebase'
 import PageWrapper from '@/components/PageWrapper'
 import GameReview from '@/components/GameReview'
 import StagePicker from '@/components/StagePicker'
-import type { Song } from '@/types'
+import type { Song, SongsStageState } from '@/types'
 
 type Mode = 'pick' | 'play' | 'review'
 
@@ -21,6 +21,8 @@ export default function SongsGame() {
   const openVideo         = useAppStore(s => s.openVideo)
   const stageProgressData = useAppStore(s => s.stageProgress['songs'])
   const markStageComplete = useAppStore(s => s.markStageComplete)
+  const savedStageState   = useAppStore(s => s.stageState['songs'])
+  const saveStageState    = useAppStore(s => s.saveStageState)
 
   const [songs, setSongs]     = useState<Song[]>([])
   const [loading, setLoad]    = useState(true)
@@ -33,6 +35,7 @@ export default function SongsGame() {
   const [result, setResult]         = useState<'correct' | 'gave-up' | null>(null)
   const [attempts, setAttempts]     = useState(0)
   const [wrongFlash, setWrongFlash] = useState(false)
+  const [guessHistory, setGuessHistory] = useState<string[]>([])
 
   const song    = songs[activeIdx]
   const results = stageProgressData?.results ?? {}
@@ -44,16 +47,56 @@ export default function SongsGame() {
   const getLines = (s: Song): string[] =>
     s.lyricLines?.length ? s.lyricLines : s.lyricClue ? [s.lyricClue] : []
 
-  const resetPlay = () => {
-    setLines(1); setHint(0); setGuess(''); setResult(null); setAttempts(0)
+  const snapshotState = useCallback((
+    idx: number,
+    rl: number, h: number, att: number,
+    res: 'correct' | 'gave-up' | null,
+    gh: string[]
+  ) => {
+    saveStageState('songs', idx, {
+      revealedLines: rl, hint: h, attempts: att, result: res, guessHistory: gh,
+    } as SongsStageState)
+  }, [saveStageState])
+
+  const loadStageOrReset = (idx: number) => {
+    const saved = savedStageState?.[idx] as SongsStageState | undefined
+    if (saved) {
+      setLines(saved.revealedLines)
+      setHint(saved.hint)
+      setAttempts(saved.attempts)
+      setResult(saved.result)
+      setGuessHistory(saved.guessHistory)
+    } else {
+      setLines(1)
+      setHint(0)
+      setAttempts(0)
+      setResult(null)
+      setGuessHistory([])
+    }
+    setGuess('')
   }
 
   const selectStage = (idx: number) => {
-    setActiveIdx(idx); resetPlay(); setMode('play')
+    snapshotState(activeIdx, revealedLines, hint, attempts, result, guessHistory)
+    setActiveIdx(idx)
+    loadStageOrReset(idx)
+    setMode('play')
   }
 
-  const goToPicker = () => { resetPlay(); setMode('pick') }
+  const goToPicker = () => {
+    snapshotState(activeIdx, revealedLines, hint, attempts, result, guessHistory)
+    setMode('pick')
+  }
+
   const goToReview = () => setMode('review')
+
+  const resetStage = () => {
+    setLines(1); setHint(0); setAttempts(0)
+    setResult(null); setGuessHistory([]); setGuess('')
+    saveStageState('songs', activeIdx, {
+      revealedLines: 1, hint: 0, attempts: 0, result: null, guessHistory: [],
+    })
+  }
 
   const submit = () => {
     if (!guess.trim() || result) return
@@ -65,14 +108,18 @@ export default function SongsGame() {
         attempts, hintsUsed, correct: true, detail: song.artist,
       })
       setResult('correct')
+      snapshotState(activeIdx, revealedLines, hint, attempts, 'correct', guessHistory)
     } else {
       const lines    = getLines(song)
       const newLines = Math.min(revealedLines + 1, lines.length)
+      const newHistory = [...guessHistory, guess.trim()]
       setLines(newLines)
       setAttempts(a => a + 1)
+      setGuessHistory(newHistory)
       setGuess('')
       setWrongFlash(true)
       setTimeout(() => setWrongFlash(false), 1100)
+      snapshotState(activeIdx, newLines, hint, attempts + 1, null, newHistory)
     }
   }
 
@@ -83,6 +130,7 @@ export default function SongsGame() {
       attempts, hintsUsed, correct: false, detail: song.artist,
     })
     setResult('gave-up')
+    snapshotState(activeIdx, revealedLines, hint, attempts, 'gave-up', guessHistory)
   }
 
   const finishReview = () => {
@@ -130,7 +178,10 @@ export default function SongsGame() {
         <div className="px-5 pt-10 pb-2 flex items-center justify-between">
           <button onClick={goToPicker} className="btn-ghost text-sm">→ חזרה</button>
           <h1 className="text-lg font-black text-gradient">זהי את השיר</h1>
-          <span className="text-sm text-gray-400">{activeIdx + 1}/{songs.length}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-400">{activeIdx + 1}/{songs.length}</span>
+            <button onClick={resetStage} title="איפוס שלב" className="text-gray-300 hover:text-blush-400 transition-colors text-lg leading-none">↺</button>
+          </div>
         </div>
 
         <div className="px-5 pb-3 flex gap-2">
@@ -189,12 +240,22 @@ export default function SongsGame() {
                     loading="lazy"
                     style={{ display: 'block' }}
                   />
-                  {/* overlay hides track title — album art, artist & controls stay visible */}
                   <div style={{ position: 'absolute', top: 43, left: 82, right: 8, height: 22, background: '#121212', pointerEvents: 'none', zIndex: 1 }} />
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Guess history */}
+          {guessHistory.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {guessHistory.map((g, i) => (
+                <span key={i} className="text-xs bg-red-50 border border-red-100 text-red-400 rounded-full px-3 py-1 font-medium">
+                  ❌ {g}
+                </span>
+              ))}
+            </div>
+          )}
 
           <AnimatePresence>
             {wrongFlash && (
@@ -238,7 +299,11 @@ export default function SongsGame() {
                 placeholder="שם השיר..." className="input-field text-center text-lg" autoComplete="off" />
               <div className="flex gap-3">
                 <button
-                  onClick={() => setHint(h => Math.min(h + 1, maxHints))}
+                  onClick={() => {
+                    const newHint = Math.min(hint + 1, maxHints)
+                    setHint(newHint)
+                    snapshotState(activeIdx, revealedLines, newHint, attempts, null, guessHistory)
+                  }}
                   disabled={hint >= maxHints}
                   className={`btn-secondary flex-1 text-sm ${hint >= maxHints ? 'opacity-40' : ''}`}
                 >

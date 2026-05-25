@@ -103,11 +103,45 @@ export interface StageProgressData {
   results: Record<number, StageResult>  // 0-based stageIdx → StageResult
 }
 
+// ─── Per-stage gameplay state (saved between stage switches) ──────────────────
+
+export type WordleStageState = {
+  guesses:  WordleGuess[]
+  usedKeys: Record<string, LetterState>
+  gameOver: boolean
+  won:      boolean
+}
+
+export type WhoAmIStageState = {
+  revealLevel:  number
+  textHints:    number
+  attempts:     number
+  result:       'correct' | 'gave-up' | null
+  guessHistory: string[]
+}
+
+export type SongsStageState = {
+  revealedLines: number
+  hint:          number
+  attempts:      number
+  result:        'correct' | 'gave-up' | null
+  guessHistory:  string[]
+}
+
+export type LukaStageState = {
+  hintIdx:      number
+  attempts:     number
+  result:       'correct' | 'gave-up' | null
+  guessHistory: string[]
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export interface AppState {
   progress:           Record<GameId, GameProgress>
   stageProgress:      Record<GameId, StageProgressData>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  stageState:         Record<GameId, Record<number, any>>
   splashDone:         boolean
   currentVideoGame:   GameId | 'finale' | null
   setSplashDone:      () => void
@@ -119,4 +153,7 @@ export interface AppState {
   resetGame:          (id: GameId) => void
   markStageComplete:  (gameId: GameId, stageIdx: number, result: StageResult) => void
   clearStageProgress: (gameId: GameId) => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  saveStageState:     (gameId: GameId, stageIdx: number, state: any) => void
+  clearGameStageState:(gameId: GameId) => void
 }

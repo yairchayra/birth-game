@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
@@ -6,7 +6,7 @@ import { getLukaNicknames } from '@/services/firebase'
 import PageWrapper from '@/components/PageWrapper'
 import GameReview from '@/components/GameReview'
 import StagePicker from '@/components/StagePicker'
-import type { LukaNickname } from '@/types'
+import type { LukaNickname, LukaStageState } from '@/types'
 
 type Mode = 'pick' | 'play' | 'review'
 
@@ -16,6 +16,8 @@ export default function LukaGame() {
   const openVideo         = useAppStore(s => s.openVideo)
   const stageProgressData = useAppStore(s => s.stageProgress['luka'])
   const markStageComplete = useAppStore(s => s.markStageComplete)
+  const savedStageState   = useAppStore(s => s.stageState['luka'])
+  const saveStageState    = useAppStore(s => s.saveStageState)
 
   const [cards, setCards]     = useState<LukaNickname[]>([])
   const [loading, setLoad]    = useState(true)
@@ -27,6 +29,7 @@ export default function LukaGame() {
   const [result, setResult]         = useState<'correct' | 'gave-up' | null>(null)
   const [attempts, setAttempts]     = useState(0)
   const [wrongFlash, setWrongFlash] = useState(false)
+  const [guessHistory, setGuessHistory] = useState<string[]>([])
 
   const card    = cards[activeIdx]
   const results = stageProgressData?.results ?? {}
@@ -35,52 +38,83 @@ export default function LukaGame() {
     getLukaNicknames().then(c => { setCards(c.slice(0, 10)); setLoad(false) })
   }, [])
 
-  const resetPlay = () => {
-    setHintIdx(0); setGuess(''); setResult(null); setAttempts(0)
+  const snapshotState = useCallback((
+    idx: number,
+    hi: number, att: number,
+    res: 'correct' | 'gave-up' | null,
+    gh: string[]
+  ) => {
+    saveStageState('luka', idx, {
+      hintIdx: hi, attempts: att, result: res, guessHistory: gh,
+    } as LukaStageState)
+  }, [saveStageState])
+
+  const loadStageOrReset = (idx: number) => {
+    const saved = savedStageState?.[idx] as LukaStageState | undefined
+    if (saved) {
+      setHintIdx(saved.hintIdx)
+      setAttempts(saved.attempts)
+      setResult(saved.result)
+      setGuessHistory(saved.guessHistory)
+    } else {
+      setHintIdx(0)
+      setAttempts(0)
+      setResult(null)
+      setGuessHistory([])
+    }
+    setGuess('')
   }
 
   const selectStage = (idx: number) => {
+    snapshotState(activeIdx, hintIdx, attempts, result, guessHistory)
     setActiveIdx(idx)
-    resetPlay()
+    loadStageOrReset(idx)
     setMode('play')
   }
 
   const goToPicker = () => {
-    resetPlay()
+    snapshotState(activeIdx, hintIdx, attempts, result, guessHistory)
     setMode('pick')
   }
 
   const goToReview = () => setMode('review')
+
+  const resetStage = () => {
+    setHintIdx(0); setAttempts(0)
+    setResult(null); setGuessHistory([]); setGuess('')
+    saveStageState('luka', activeIdx, {
+      hintIdx: 0, attempts: 0, result: null, guessHistory: [],
+    })
+  }
 
   const submit = () => {
     if (!guess.trim() || result) return
     const correct = guess.trim().toLowerCase() === card.nickname.trim().toLowerCase()
     if (correct) {
       markStageComplete('luka', activeIdx, {
-        stageNum:  activeIdx + 1,
-        answer:    card.nickname,
-        attempts,
-        hintsUsed: hintIdx > 0,
-        correct:   true,
+        stageNum: activeIdx + 1, answer: card.nickname,
+        attempts, hintsUsed: hintIdx > 0, correct: true,
       })
       setResult('correct')
+      snapshotState(activeIdx, hintIdx, attempts, 'correct', guessHistory)
     } else {
+      const newHistory = [...guessHistory, guess.trim()]
       setAttempts(a => a + 1)
+      setGuessHistory(newHistory)
       setWrongFlash(true)
       setGuess('')
       setTimeout(() => setWrongFlash(false), 1100)
+      snapshotState(activeIdx, hintIdx, attempts + 1, null, newHistory)
     }
   }
 
   const giveUp = () => {
     markStageComplete('luka', activeIdx, {
-      stageNum:  activeIdx + 1,
-      answer:    card.nickname,
-      attempts,
-      hintsUsed: hintIdx > 0,
-      correct:   false,
+      stageNum: activeIdx + 1, answer: card.nickname,
+      attempts, hintsUsed: hintIdx > 0, correct: false,
     })
     setResult('gave-up')
+    snapshotState(activeIdx, hintIdx, attempts, 'gave-up', guessHistory)
   }
 
   const finishReview = () => {
@@ -135,7 +169,10 @@ export default function LukaGame() {
         <div className="px-5 pt-10 pb-2 flex items-center justify-between">
           <button onClick={goToPicker} className="btn-ghost text-sm">→ חזרה</button>
           <h1 className="text-lg font-black text-gradient">כינויים ללוקה</h1>
-          <span className="text-sm text-gray-400">{activeIdx + 1}/{cards.length}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-400">{activeIdx + 1}/{cards.length}</span>
+            <button onClick={resetStage} title="איפוס שלב" className="text-gray-300 hover:text-blush-400 transition-colors text-lg leading-none">↺</button>
+          </div>
         </div>
 
         <div className="px-5 pb-3 flex gap-2">
@@ -163,6 +200,17 @@ export default function LukaGame() {
               </motion.div>
             ))}
           </AnimatePresence>
+
+          {/* Guess history */}
+          {guessHistory.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {guessHistory.map((g, i) => (
+                <span key={i} className="text-xs bg-red-50 border border-red-100 text-red-400 rounded-full px-3 py-1 font-medium">
+                  ❌ {g}
+                </span>
+              ))}
+            </div>
+          )}
 
           <AnimatePresence>
             {wrongFlash && (
@@ -204,7 +252,12 @@ export default function LukaGame() {
                 onKeyDown={e => e.key === 'Enter' && submit()}
                 placeholder="הכינוי של לוקה..." className="input-field text-center text-lg font-semibold" autoComplete="off" />
               <div className="flex gap-3">
-                <button onClick={() => setHintIdx(h => Math.min(card.hints.length, h + 1))}
+                <button
+                  onClick={() => {
+                    const newHint = Math.min(card.hints.length, hintIdx + 1)
+                    setHintIdx(newHint)
+                    snapshotState(activeIdx, newHint, attempts, null, guessHistory)
+                  }}
                   disabled={hintIdx >= card.hints.length}
                   className={`btn-secondary flex-1 text-sm ${hintIdx >= card.hints.length ? 'opacity-40' : ''}`}>
                   🐾 רמז ({Math.max(0, card.hints.length - hintIdx)} נותרו)
