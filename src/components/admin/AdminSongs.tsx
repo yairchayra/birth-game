@@ -20,6 +20,51 @@ const songToForm = (s: Song): EditForm => {
   }
 }
 
+// ── Defined OUTSIDE AdminSongs so React never remounts them on re-render ──────
+
+function SpotifyPreview({ url }: { url: string }) {
+  const m = url.match(/track\/([A-Za-z0-9]+)/)
+  const embedUrl = m ? `https://open.spotify.com/embed/track/${m[1]}?utm_source=generator&theme=0` : null
+  if (!embedUrl) return <p className="text-xs text-red-400">URL לא חוקי — הדבק לינק לטראק מספוטיפיי</p>
+  return (
+    <div className="rounded-xl overflow-hidden border border-lavender-100">
+      <p className="text-xs text-gray-400 px-3 pt-2">תצוגה מקדימה 🎧</p>
+      <div className="relative" style={{ direction: 'ltr' }}>
+        <iframe src={embedUrl} width="100%" height="152" frameBorder="0"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy" style={{ display: 'block' }} />
+        <div style={{ position: 'absolute', top: 43, left: 82, right: 8, height: 22, background: '#121212', pointerEvents: 'none', zIndex: 1 }} />
+      </div>
+    </div>
+  )
+}
+
+function LineFields({ vals, onChange }: {
+  vals: EditForm
+  onChange: (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => void
+}) {
+  return (
+    <>
+      <p className="text-xs font-semibold text-gray-500 -mb-1">שורות לשיר:</p>
+      {([
+        ['line1', 'שורה 1 * (תמיד מוצגת ראשונה)'],
+        ['line2', 'שורה 2 (אופציונלי)'],
+        ['line3', 'שורה 3 (אופציונלי)'],
+        ['line4', 'שורה 4 (אופציונלי)'],
+      ] as [string, string][]).map(([key, ph]) => (
+        <div key={key} className="relative">
+          <input className="input-field pr-10" placeholder={ph}
+            value={(vals as Record<string, string>)[key]}
+            onChange={onChange(key)} />
+          <span className="absolute top-3 right-3 text-sm">🎵</span>
+        </div>
+      ))}
+    </>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function AdminSongs() {
   const [songs, setSongs]   = useState<Song[]>([])
   const [form, setForm]     = useState(emptyForm())
@@ -27,7 +72,6 @@ export default function AdminSongs() {
   const [saving, setSaving] = useState(false)
   const [expand, setExpand] = useState(false)
 
-  // Edit state
   const [editId, setEditId]     = useState<string | null>(null)
   const [editForm, setEditForm] = useState(emptyForm())
 
@@ -60,7 +104,7 @@ export default function AdminSongs() {
     setSaving(false)
   }
 
-  const startEdit = (s: Song) => { setEditId(s.id); setEditForm(songToForm(s)) }
+  const startEdit  = (s: Song) => { setEditId(s.id); setEditForm(songToForm(s)) }
   const cancelEdit = () => { setEditId(null); setEditForm(emptyForm()) }
 
   const saveEdit = async (id: string) => {
@@ -79,42 +123,6 @@ export default function AdminSongs() {
     await load()
     setSaving(false)
   }
-
-  const SpotifyPreview = ({ url }: { url: string }) => {
-    const m = url.match(/track\/([A-Za-z0-9]+)/)
-    const embedUrl = m ? `https://open.spotify.com/embed/track/${m[1]}?utm_source=generator&theme=0` : null
-    if (!embedUrl) return <p className="text-xs text-red-400">URL לא חוקי — הדבק לינק לטראק מספוטיפיי</p>
-    return (
-      <div className="rounded-xl overflow-hidden border border-lavender-100">
-        <p className="text-xs text-gray-400 px-3 pt-2">תצוגה מקדימה 🎧</p>
-        <div className="relative" style={{ direction: 'ltr' }}>
-          <iframe src={embedUrl} width="100%" height="152" frameBorder="0"
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            loading="lazy" style={{ display: 'block' }} />
-          <div style={{ position: 'absolute', top: 43, left: 82, right: 8, height: 22, background: '#121212', pointerEvents: 'none', zIndex: 1 }} />
-        </div>
-      </div>
-    )
-  }
-
-  const LineFields = ({ vals, onChange }: { vals: EditForm; onChange: (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => void }) => (
-    <>
-      <p className="text-xs font-semibold text-gray-500 -mb-1">שורות לשיר:</p>
-      {[
-        ['line1', 'שורה 1 * (תמיד מוצגת ראשונה)'],
-        ['line2', 'שורה 2 (אופציונלי)'],
-        ['line3', 'שורה 3 (אופציונלי)'],
-        ['line4', 'שורה 4 (אופציונלי)'],
-      ].map(([key, ph]) => (
-        <div key={key} className="relative">
-          <input className="input-field pr-10" placeholder={ph}
-            value={(vals as Record<string, string>)[key]}
-            onChange={onChange(key)} />
-          <span className="absolute top-3 right-3 text-sm">🎵</span>
-        </div>
-      ))}
-    </>
-  )
 
   return (
     <div className="flex flex-col gap-5">
@@ -151,7 +159,6 @@ export default function AdminSongs() {
               {songs.map(s => (
                 <motion.div key={s.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }}>
                   {editId === s.id ? (
-                    /* ── Edit panel ── */
                     <div className="card p-4 border-2 border-lavender-200 flex flex-col gap-3">
                       <p className="text-sm font-bold text-lavender-500">✏️ עריכת שיר</p>
                       <input className="input-field" placeholder="שם השיר *"  value={editForm.title}  onChange={ef('title')} />
@@ -167,7 +174,6 @@ export default function AdminSongs() {
                       </div>
                     </div>
                   ) : (
-                    /* ── Display row ── */
                     <div className="flex items-center gap-3 p-3 bg-lavender-50 rounded-2xl">
                       {s.coverUrl ? (
                         <img src={s.coverUrl} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
@@ -179,7 +185,7 @@ export default function AdminSongs() {
                         <p className="text-xs text-gray-400 truncate">{s.artist}</p>
                         <p className="text-xs text-lavender-500 mt-0.5">{(s.lyricLines?.length || 1)} שורות</p>
                       </div>
-                      <button onClick={() => startEdit(s)}             className="text-lavender-400 hover:bg-lavender-100 rounded-xl p-1.5 flex-shrink-0">✏️</button>
+                      <button onClick={() => startEdit(s)}              className="text-lavender-400 hover:bg-lavender-100 rounded-xl p-1.5 flex-shrink-0">✏️</button>
                       <button onClick={() => deleteSong(s.id).then(load)} className="text-red-400 hover:bg-red-100 rounded-xl p-1.5 flex-shrink-0">🗑️</button>
                     </div>
                   )}
