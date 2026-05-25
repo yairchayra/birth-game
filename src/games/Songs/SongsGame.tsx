@@ -240,7 +240,7 @@ export default function SongsGame() {
                     loading="lazy"
                     style={{ display: 'block' }}
                   />
-                  <div style={{ position: 'absolute', top: 43, left: 82, right: 8, height: 22, background: '#121212', pointerEvents: 'none', zIndex: 1 }} />
+                  <div style={{ position: 'absolute', top: 43, left: 110, right: 8, height: 22, background: '#1F1F1F', pointerEvents: 'none', zIndex: 1 }} />
                 </div>
               </motion.div>
             )}
