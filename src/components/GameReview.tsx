@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { StageResult } from '@/types'
 
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function GameReview({ results, gameName, gameEmoji, onContinue }: Props) {
+  const navigate = useNavigate()
   const [idx, setIdx] = useState(0)
   const r = results[idx]
 
@@ -23,10 +25,16 @@ export default function GameReview({ results, gameName, gameEmoji, onContinue }:
     <motion.div
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
-      className="fixed inset-0 z-40 bg-gradient-soft flex flex-col overflow-y-auto"
+      className="fixed inset-0 z-40 bg-gradient-soft flex flex-col overflow-y-auto relative"
     >
       {/* Header */}
-      <div className="px-5 pt-12 pb-4 text-center">
+      <div className="px-5 pt-10 pb-4 text-center">
+        <button
+          onClick={() => navigate('/games')}
+          className="absolute top-10 right-5 btn-ghost text-sm"
+        >
+          → משחקים
+        </button>
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
