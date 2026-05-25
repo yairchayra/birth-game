@@ -260,9 +260,9 @@ export default function WordleGame() {
           </div>
         </div>
 
-        <div className="px-3 pb-6 pt-2">
+        <div className="px-2 pb-5 pt-1">
           {HEBREW_KEYBOARD.map((row, ri) => (
-            <div key={ri} className="flex justify-center gap-1 mb-1.5">
+            <div key={ri} className="flex justify-center gap-0.5 mb-1">
               {ri === 2 && <button onClick={() => keyPress('ENTER')} className="key bg-green-100 text-green-700 px-3 text-xs">אישור</button>}
               {row.map(k => (
                 <button key={k} onClick={() => keyPress(k)} className={`key text-sm ${

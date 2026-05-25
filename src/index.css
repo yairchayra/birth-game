@@ -99,11 +99,11 @@
 
 /* ─── Wordle keyboard ──────────────────────────────────────────────────────── */
 .key {
-  @apply flex items-center justify-center rounded-xl font-bold text-sm
+  @apply flex items-center justify-center rounded-lg font-bold text-sm
          select-none cursor-pointer active:scale-90 transition-all duration-100;
-  min-width: 2.2rem;
-  height: 3.2rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  min-width: 1.85rem;
+  height: 2.6rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
 /* ─── Animations ───────────────────────────────────────────────────────────── */
