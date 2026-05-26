@@ -46,15 +46,16 @@ export interface WhoAmICard {
 // ─── Songs ────────────────────────────────────────────────────────────────────
 
 export interface Song {
-  id:           string
-  title:        string
-  artist:       string
-  lyricClue:    string    // שמור לתאימות לאחור — שורה ראשונה
-  lyricLines:   string[]  // עד 4 שורות, נחשפות הדרגתית
-  hints:        string[]  // [artist, album art url, spotify link]
-  spotifyUrl:   string
-  coverUrl:     string
-  order:        number
+  id:            string
+  title:         string
+  artist:        string
+  lyricClue:     string    // שמור לתאימות לאחור — שורה ראשונה
+  lyricLines:    string[]  // עד 4 שורות, נחשפות הדרגתית
+  originalLines?: string[] // עד 4 שורות בשפה המקורית — נחשפות לאחר ניחוש נכון
+  hints:         string[]  // [artist, album art url, spotify link]
+  spotifyUrl:    string
+  coverUrl:      string
+  order:         number
 }
 
 // ─── Luka ─────────────────────────────────────────────────────────────────────

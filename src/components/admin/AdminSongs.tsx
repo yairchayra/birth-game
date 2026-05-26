@@ -6,21 +6,25 @@ import type { Song } from '@/types'
 const emptyForm = () => ({
   title: '', artist: '', spotifyUrl: '', coverUrl: '',
   line1: '', line2: '', line3: '', line4: '',
+  orig1: '', orig2: '', orig3: '', orig4: '',
 })
 
 type EditForm = ReturnType<typeof emptyForm>
 
 const songToForm = (s: Song): EditForm => {
   const lines = s.lyricLines?.length ? s.lyricLines : s.lyricClue ? [s.lyricClue] : []
+  const origs = s.originalLines ?? []
   return {
     title: s.title, artist: s.artist ?? '',
     spotifyUrl: s.spotifyUrl ?? '', coverUrl: s.coverUrl ?? '',
     line1: lines[0] ?? '', line2: lines[1] ?? '',
     line3: lines[2] ?? '', line4: lines[3] ?? '',
+    orig1: origs[0] ?? '', orig2: origs[1] ?? '',
+    orig3: origs[2] ?? '', orig4: origs[3] ?? '',
   }
 }
 
-// ── Defined OUTSIDE AdminSongs so React never remounts them on re-render ──────
+// ── Defined OUTSIDE so React never remounts on re-render ──────────────────────
 
 function SpotifyPreview({ url }: { url: string }) {
   const m = url.match(/track\/([A-Za-z0-9]+)/)
@@ -39,24 +43,32 @@ function SpotifyPreview({ url }: { url: string }) {
   )
 }
 
-function LineFields({ vals, onChange }: {
+function LinePairFields({ vals, onChange }: {
   vals: EditForm
   onChange: (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => void
 }) {
+  const pairs: [string, string, string][] = [
+    ['line1', 'orig1', 'שורה 1 (תמיד מוצגת ראשונה)'],
+    ['line2', 'orig2', 'שורה 2'],
+    ['line3', 'orig3', 'שורה 3'],
+    ['line4', 'orig4', 'שורה 4'],
+  ]
+  const v = vals as Record<string, string>
   return (
     <>
-      <p className="text-xs font-semibold text-gray-500 -mb-1">שורות לשיר:</p>
-      {([
-        ['line1', 'שורה 1 * (תמיד מוצגת ראשונה)'],
-        ['line2', 'שורה 2 (אופציונלי)'],
-        ['line3', 'שורה 3 (אופציונלי)'],
-        ['line4', 'שורה 4 (אופציונלי)'],
-      ] as [string, string][]).map(([key, ph]) => (
-        <div key={key} className="relative">
-          <input className="input-field pr-10" placeholder={ph}
-            value={(vals as Record<string, string>)[key]}
-            onChange={onChange(key)} />
-          <span className="absolute top-3 right-3 text-sm">🎵</span>
+      {pairs.map(([lk, ok, label], i) => (
+        <div key={lk} className="flex flex-col gap-1.5">
+          <p className="text-xs font-semibold text-gray-500">{label}{i === 0 ? ' *' : ' (אופציונלי)'}</p>
+          <div className="relative">
+            <input className="input-field pr-10" placeholder="מתורגמת"
+              value={v[lk]} onChange={onChange(lk)} />
+            <span className="absolute top-3 right-3 text-sm">🎵</span>
+          </div>
+          <div className="relative">
+            <input className="input-field pr-10 bg-lavender-50" placeholder="מקורית (אופציונלי)"
+              value={v[ok]} onChange={onChange(ok)} />
+            <span className="absolute top-3 right-3 text-sm">🎼</span>
+          </div>
         </div>
       ))}
     </>
@@ -84,20 +96,22 @@ export default function AdminSongs() {
   const ef = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setEditForm(prev => ({ ...prev, [k]: e.target.value }))
 
+  const buildSongData = (fm: EditForm, order: number) => ({
+    title:         fm.title.trim(),
+    artist:        fm.artist.trim(),
+    lyricClue:     fm.line1.trim(),
+    lyricLines:    [fm.line1, fm.line2, fm.line3, fm.line4].filter(Boolean).map(s => s.trim()),
+    originalLines: [fm.orig1, fm.orig2, fm.orig3, fm.orig4].filter(Boolean).map(s => s.trim()),
+    hints:         [],
+    spotifyUrl:    fm.spotifyUrl.trim(),
+    coverUrl:      fm.coverUrl.trim(),
+    order,
+  })
+
   const add = async () => {
     if (!form.title.trim() || !form.line1.trim()) return
     setSaving(true)
-    const lyricLines = [form.line1, form.line2, form.line3, form.line4].filter(Boolean)
-    await addSong({
-      title:      form.title.trim(),
-      artist:     form.artist.trim(),
-      lyricClue:  form.line1.trim(),
-      lyricLines,
-      hints:      [],
-      spotifyUrl: form.spotifyUrl.trim(),
-      coverUrl:   form.coverUrl.trim(),
-      order:      songs.length,
-    })
+    await addSong(buildSongData(form, songs.length) as Parameters<typeof addSong>[0])
     setForm(emptyForm())
     setExpand(false)
     await load()
@@ -110,15 +124,8 @@ export default function AdminSongs() {
   const saveEdit = async (id: string) => {
     if (!editForm.title.trim() || !editForm.line1.trim()) return
     setSaving(true)
-    const lyricLines = [editForm.line1, editForm.line2, editForm.line3, editForm.line4].filter(Boolean)
-    await updateSong(id, {
-      title:      editForm.title.trim(),
-      artist:     editForm.artist.trim(),
-      lyricClue:  editForm.line1.trim(),
-      lyricLines,
-      spotifyUrl: editForm.spotifyUrl.trim(),
-      coverUrl:   editForm.coverUrl.trim(),
-    })
+    const { order: _o, hints: _h, ...data } = buildSongData(editForm, 0)
+    await updateSong(id, data)
     cancelEdit()
     await load()
     setSaving(false)
@@ -128,7 +135,7 @@ export default function AdminSongs() {
     <div className="flex flex-col gap-5">
       <div className="card p-5">
         <h2 className="section-title">🎵 שירים</h2>
-        <p className="section-subtitle">הוסיפי שירים לזיהוי — עד 4 שורות לכל שיר</p>
+        <p className="section-subtitle">הוסיפי שירים לזיהוי — עד 4 שורות + שורה מקורית לכל אחת</p>
 
         <button onClick={() => setExpand(e => !e)} className="btn-secondary w-full mb-4">
           {expand ? '▲ סגור' : '+ הוסף שיר'}
@@ -140,7 +147,7 @@ export default function AdminSongs() {
               <div className="flex flex-col gap-3 mb-5 pt-1">
                 <input className="input-field" placeholder="שם השיר *"  value={form.title}  onChange={f('title')} />
                 <input className="input-field" placeholder="אמן *"       value={form.artist} onChange={f('artist')} />
-                <LineFields vals={form} onChange={f} />
+                <LinePairFields vals={form} onChange={f} />
                 <input className="input-field" placeholder="Spotify URL (אופציונלי)" value={form.spotifyUrl} onChange={f('spotifyUrl')} />
                 {form.spotifyUrl && <SpotifyPreview url={form.spotifyUrl} />}
                 <button onClick={add} disabled={saving} className="btn-primary mt-1">
@@ -163,7 +170,7 @@ export default function AdminSongs() {
                       <p className="text-sm font-bold text-lavender-500">✏️ עריכת שיר</p>
                       <input className="input-field" placeholder="שם השיר *"  value={editForm.title}  onChange={ef('title')} />
                       <input className="input-field" placeholder="אמן *"       value={editForm.artist} onChange={ef('artist')} />
-                      <LineFields vals={editForm} onChange={ef} />
+                      <LinePairFields vals={editForm} onChange={ef} />
                       <input className="input-field" placeholder="Spotify URL" value={editForm.spotifyUrl} onChange={ef('spotifyUrl')} />
                       {editForm.spotifyUrl && <SpotifyPreview url={editForm.spotifyUrl} />}
                       <div className="flex gap-2">
