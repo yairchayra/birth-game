@@ -10,6 +10,7 @@ import type { WhoAmICard, WhoAmIStageState } from '@/types'
 
 const BLUR_PX = [40, 28, 18, 12, 7, 3.5, 1, 0]
 const MAX_REVEAL = 7
+const OVERLAY_THRESHOLD = MAX_REVEAL - 1  // רמה 6 — שלב לפני הסוף
 
 function BlurredImage({ src, level }: { src: string; level: number }) {
   const blur = BLUR_PX[Math.min(level, 7)]
@@ -25,9 +26,11 @@ function BlurredImage({ src, level }: { src: string; level: number }) {
           transform:  blur > 0 ? 'scale(1.08)' : 'scale(1)',
         }}
       />
-      <div className="absolute bottom-3 right-3 z-10 bg-white/85 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-bold text-blush-500 shadow-soft">
-        בהירות {level}/7
-      </div>
+      {level < MAX_REVEAL && (
+        <div className="absolute bottom-3 right-3 z-10 bg-white/85 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-bold text-blush-500 shadow-soft">
+          בהירות {level}/7
+        </div>
+      )}
     </div>
   )
 }
@@ -35,26 +38,28 @@ function BlurredImage({ src, level }: { src: string; level: number }) {
 type Mode = 'pick' | 'play' | 'review'
 
 export default function WhoAmIGame() {
-  const navigate          = useNavigate()
-  const completeGame      = useAppStore(s => s.completeGame)
-  const openVideo         = useAppStore(s => s.openVideo)
-  const stageProgressData = useAppStore(s => s.stageProgress['who-am-i'])
-  const markStageComplete = useAppStore(s => s.markStageComplete)
-  const savedStageState   = useAppStore(s => s.stageState['who-am-i'])
-  const saveStageState    = useAppStore(s => s.saveStageState)
+  const navigate           = useNavigate()
+  const completeGame       = useAppStore(s => s.completeGame)
+  const openVideo          = useAppStore(s => s.openVideo)
+  const stageProgressData  = useAppStore(s => s.stageProgress['who-am-i'])
+  const markStageComplete  = useAppStore(s => s.markStageComplete)
+  const savedStageState    = useAppStore(s => s.stageState['who-am-i'])
+  const saveStageState     = useAppStore(s => s.saveStageState)
+  const resetSingleStage   = useAppStore(s => s.resetSingleStage)
 
   const [cards, setCards]     = useState<WhoAmICard[]>([])
   const [loading, setLoading] = useState(true)
   const [mode, setMode]       = useState<Mode>('pick')
   const [activeIdx, setActiveIdx] = useState(0)
 
-  const [revealLevel, setRevealLevel] = useState(0)
-  const [textHints, setTextHints]     = useState(0)
-  const [attempts, setAttempts]       = useState(0)
-  const [guess, setGuess]             = useState('')
-  const [result, setResult]           = useState<'correct' | 'gave-up' | null>(null)
-  const [wrongFlash, setWrongFlash]   = useState(false)
-  const [guessHistory, setGuessHistory] = useState<string[]>([])
+  const [revealLevel, setRevealLevel]       = useState(0)
+  const [textHints, setTextHints]           = useState(0)
+  const [attempts, setAttempts]             = useState(0)
+  const [guess, setGuess]                   = useState('')
+  const [result, setResult]                 = useState<'correct' | 'gave-up' | null>(null)
+  const [wrongFlash, setWrongFlash]         = useState(false)
+  const [guessHistory, setGuessHistory]     = useState<string[]>([])
+  const [showMaxOverlay, setShowMaxOverlay] = useState(false)
 
   const card    = cards[activeIdx]
   const results = stageProgressData?.results ?? {}
@@ -90,6 +95,7 @@ export default function WhoAmIGame() {
       setGuessHistory([])
     }
     setGuess('')
+    setShowMaxOverlay(false)
   }
 
   const selectStage = (idx: number) => {
@@ -110,9 +116,11 @@ export default function WhoAmIGame() {
     const initialLevel = card?.initialPixelLevel ?? 0
     setRevealLevel(initialLevel); setTextHints(0); setAttempts(0)
     setResult(null); setGuessHistory([]); setGuess('')
+    setShowMaxOverlay(false)
     saveStageState('who-am-i', activeIdx, {
       revealLevel: initialLevel, textHints: 0, attempts: 0, result: null, guessHistory: [],
     })
+    resetSingleStage('who-am-i', activeIdx)
   }
 
   const doAutoFail = (newAttempts: number, newLevel: number, gh: string[]) => {
@@ -135,7 +143,8 @@ export default function WhoAmIGame() {
         attempts, hintsUsed, correct: true,
       })
       setResult('correct')
-      snapshotState(activeIdx, revealLevel, textHints, attempts, 'correct', guessHistory)
+      setShowMaxOverlay(false)
+      snapshotState(activeIdx, MAX_REVEAL, textHints, attempts, 'correct', guessHistory)
     } else {
       const newAttempts = attempts + 1
       const newLevel    = Math.min(revealLevel + 1, MAX_REVEAL)
@@ -147,8 +156,13 @@ export default function WhoAmIGame() {
       if (newLevel >= MAX_REVEAL) {
         doAutoFail(newAttempts, newLevel, newHistory)
       } else {
-        setWrongFlash(true)
-        setTimeout(() => setWrongFlash(false), 1100)
+        // הראי overlay כבר ברמה 6 (שלב לפני הסוף)
+        if (newLevel >= OVERLAY_THRESHOLD) {
+          setShowMaxOverlay(true)
+        } else {
+          setWrongFlash(true)
+          setTimeout(() => setWrongFlash(false), 1100)
+        }
         snapshotState(activeIdx, newLevel, textHints, newAttempts, null, newHistory)
       }
     }
@@ -193,6 +207,9 @@ export default function WhoAmIGame() {
   if (!card) return null
   const hintsUsedSoFar = textHints > 0 || revealLevel > (card.initialPixelLevel ?? 0)
 
+  // תמונה ברורה לחלוטין אחרי ניחוש נכון
+  const imageLevel = result === 'correct' ? MAX_REVEAL : revealLevel
+
   return (
     <PageWrapper>
       <div className="min-h-screen bg-gradient-soft flex flex-col">
@@ -219,23 +236,53 @@ export default function WhoAmIGame() {
         </div>
 
         <div className="flex-1 px-5 pb-8 flex flex-col gap-4">
-          <motion.div key={`img-${activeIdx}`} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-            <BlurredImage src={card.imageUrl} level={revealLevel} />
+          {/* תמונה עם overlay אפשרי */}
+          <motion.div key={`img-${activeIdx}`} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className="relative">
+            <BlurredImage src={card.imageUrl} level={imageLevel} />
+
+            {/* Overlay "לא נורא" — מופיע ברמה 6 */}
+            <AnimatePresence>
+              {showMaxOverlay && !result && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 rounded-3xl z-20 flex flex-col items-center justify-center gap-3"
+                  style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}
+                >
+                  <p className="text-white text-xl font-black drop-shadow">לא נורא 😊</p>
+                  <p className="text-white/90 text-sm font-medium text-center px-6 leading-snug drop-shadow">
+                    נתן לך נסיון חוזר רק היום
+                  </p>
+                  <button
+                    onClick={resetStage}
+                    className="mt-1 bg-white text-blush-500 font-black text-2xl w-14 h-14 rounded-full shadow-strong flex items-center justify-center active:scale-90 transition-transform"
+                    title="איפוס שלב"
+                  >↺</button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
 
           {!result && (
             <div className="flex gap-3">
               <button
                 onClick={() => {
+                  if (revealLevel >= OVERLAY_THRESHOLD) {
+                    setShowMaxOverlay(true)
+                    return
+                  }
                   const newLevel = Math.min(revealLevel + 1, MAX_REVEAL)
                   setRevealLevel(newLevel)
                   snapshotState(activeIdx, newLevel, textHints, attempts, null, guessHistory)
                 }}
-                disabled={revealLevel >= MAX_REVEAL}
-                className={`btn-secondary flex-1 text-sm ${revealLevel >= MAX_REVEAL ? 'opacity-40' : ''}`}
+                className="btn-secondary flex-1 text-sm"
               >
                 🔓 חשוף יותר
-                <span className="text-xs mr-1 opacity-60">({MAX_REVEAL - revealLevel})</span>
+                {revealLevel < OVERLAY_THRESHOLD && (
+                  <span className="text-xs mr-1 opacity-60">({OVERLAY_THRESHOLD - revealLevel})</span>
+                )}
               </button>
               <button
                 onClick={() => {
@@ -260,7 +307,7 @@ export default function WhoAmIGame() {
             ))}
           </AnimatePresence>
 
-          {/* Guess history */}
+          {/* היסטוריית ניחושים */}
           {guessHistory.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {guessHistory.map((g, i) => (

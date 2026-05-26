@@ -59,6 +59,7 @@ export default function WordleGame() {
   const markStageComplete = useAppStore(s => s.markStageComplete)
   const savedStageState   = useAppStore(s => s.stageState['wordle'])
   const saveStageState    = useAppStore(s => s.saveStageState)
+  const resetSingleStage  = useAppStore(s => s.resetSingleStage)
 
   const [words, setWords]     = useState<WordleWord[]>([])
   const [loading, setLoading] = useState(true)
@@ -119,6 +120,7 @@ export default function WordleGame() {
     const fresh = { guesses: [], usedKeys: {}, gameOver: false, won: false } as WordleStageState
     setGuesses([]); setUsedKeys({}); setGameOver(false); setWon(false); setCurrent('')
     saveStageState('wordle', activeIdx, fresh)
+    resetSingleStage('wordle', activeIdx)
   }
 
   const submitGuess = useCallback(() => {

@@ -18,6 +18,7 @@ export default function LukaGame() {
   const markStageComplete = useAppStore(s => s.markStageComplete)
   const savedStageState   = useAppStore(s => s.stageState['luka'])
   const saveStageState    = useAppStore(s => s.saveStageState)
+  const resetSingleStage  = useAppStore(s => s.resetSingleStage)
 
   const [cards, setCards]     = useState<LukaNickname[]>([])
   const [loading, setLoad]    = useState(true)
@@ -85,6 +86,7 @@ export default function LukaGame() {
     saveStageState('luka', activeIdx, {
       hintIdx: 0, attempts: 0, result: null, guessHistory: [],
     })
+    resetSingleStage('luka', activeIdx)
   }
 
   const submit = () => {

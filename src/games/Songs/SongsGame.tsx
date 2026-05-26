@@ -86,6 +86,7 @@ export default function SongsGame() {
   const markStageComplete = useAppStore(s => s.markStageComplete)
   const savedStageState   = useAppStore(s => s.stageState['songs'])
   const saveStageState    = useAppStore(s => s.saveStageState)
+  const resetSingleStage  = useAppStore(s => s.resetSingleStage)
 
   const [songs, setSongs]     = useState<Song[]>([])
   const [loading, setLoad]    = useState(true)
@@ -150,6 +151,7 @@ export default function SongsGame() {
     saveStageState('songs', activeIdx, {
       revealedLines: 1, hint: 0, attempts: 0, result: null, guessHistory: [],
     })
+    resetSingleStage('songs', activeIdx)
   }
 
   const submit = () => {
@@ -205,7 +207,8 @@ export default function SongsGame() {
       <StagePicker totalStages={songs.length} results={results}
         gameName="זהי את השיר" gameEmoji="🎵"
         onSelect={selectStage} onReview={goToReview}
-        onBack={() => navigate('/games')} />
+        onBack={() => navigate('/games')}
+        />
     </PageWrapper>
   )
 

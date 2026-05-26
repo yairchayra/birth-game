@@ -152,6 +152,7 @@ export interface AppState {
   closeVideo:         () => void
   allGamesCompleted:  () => boolean
   resetGame:          (id: GameId) => void
+  resetSingleStage:   (gameId: GameId, stageIdx: number) => void
   markStageComplete:  (gameId: GameId, stageIdx: number, result: StageResult) => void
   clearStageProgress: (gameId: GameId) => void
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

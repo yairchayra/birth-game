@@ -72,6 +72,24 @@ export const useAppStore = create<AppState>()(
           },
         })),
 
+      resetSingleStage: (gameId, stageIdx) =>
+        set(state => {
+          const newResults = { ...state.stageProgress[gameId]?.results }
+          delete newResults[stageIdx]
+          const newStageState = { ...state.stageState[gameId] }
+          delete newStageState[stageIdx]
+          return {
+            stageProgress: {
+              ...state.stageProgress,
+              [gameId]: { results: newResults },
+            },
+            stageState: {
+              ...state.stageState,
+              [gameId]: newStageState,
+            },
+          }
+        }),
+
       allGamesCompleted: () => {
         const { progress } = get()
         return Object.values(progress).every(p => p.completed)

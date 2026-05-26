@@ -3,7 +3,7 @@ import type { StageResult } from '@/types'
 
 interface Props {
   totalStages: number
-  results:     Record<number, StageResult>  // 0-based idx → result
+  results:     Record<number, StageResult>
   gameName:    string
   gameEmoji:   string
   onSelect:    (idx: number) => void
@@ -12,13 +12,8 @@ interface Props {
 }
 
 export default function StagePicker({
-  totalStages,
-  results,
-  gameName,
-  gameEmoji,
-  onSelect,
-  onReview,
-  onBack,
+  totalStages, results, gameName, gameEmoji,
+  onSelect, onReview, onBack,
 }: Props) {
   const completedCount = Object.keys(results).length
   const allDone        = completedCount >= totalStages
@@ -29,14 +24,12 @@ export default function StagePicker({
       animate={{ opacity: 1, y: 0 }}
       className="min-h-screen bg-gradient-soft flex flex-col"
     >
-      {/* Header */}
       <div className="px-5 pt-10 pb-3 flex items-center justify-between">
         <button onClick={onBack} className="btn-ghost">→ חזרה</button>
         <h1 className="text-xl font-black text-gradient">{gameName}</h1>
         <span className="text-sm text-gray-400">{completedCount}/{totalStages}</span>
       </div>
 
-      {/* Progress bar */}
       <div className="px-5 mb-6">
         <div className="h-1.5 bg-blush-100 rounded-full overflow-hidden">
           <motion.div
@@ -46,7 +39,6 @@ export default function StagePicker({
         </div>
       </div>
 
-      {/* Emoji + subtitle */}
       <div className="text-center mb-6 px-5">
         <div className="text-5xl mb-2">{gameEmoji}</div>
         <p className="text-sm text-gray-400">בחרי שלב לשחק</p>
@@ -55,7 +47,6 @@ export default function StagePicker({
         )}
       </div>
 
-      {/* Stage grid */}
       <div className="flex-1 px-5 pb-4">
         <div className="grid grid-cols-5 gap-3">
           {Array.from({ length: totalStages }, (_, i) => {
@@ -77,9 +68,7 @@ export default function StagePicker({
                   <>
                     <span className="text-xl">{res.correct ? '✅' : '❌'}</span>
                     {res.correct && (
-                      <span className="text-xs opacity-60 mt-0.5">
-                        {res.attempts + 1}×
-                      </span>
+                      <span className="text-xs opacity-60 mt-0.5">{res.attempts + 1}×</span>
                     )}
                   </>
                 ) : (
@@ -91,7 +80,6 @@ export default function StagePicker({
         </div>
       </div>
 
-      {/* Bottom: review button or hint */}
       <div className="px-5 pb-10 pt-2">
         {allDone ? (
           <motion.button
